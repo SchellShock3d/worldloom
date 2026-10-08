@@ -93,8 +93,13 @@ export function EntityForm({ initial, refs, mode }: { initial: EntityFormValue; 
       setErrors({ name: "Name is required" });
       return;
     }
-    if (((v.fields[CUSTOM_FIELDS_KEY] as CustomField[] | undefined) ?? []).some((r) => r.value.trim() && !r.label.trim())) {
+    const customRows = (v.fields[CUSTOM_FIELDS_KEY] as CustomField[] | undefined) ?? [];
+    if (customRows.some((r) => r.value.trim() && !r.label.trim())) {
       toast.error("Give each of your own fields a label.");
+      return;
+    }
+    if (customRows.some((r) => r.label.trim() && !r.value.trim())) {
+      toast.error("One of your own fields has a label but no value. Fill it in or remove it.");
       return;
     }
     setPending(true);
@@ -551,7 +556,7 @@ function CustomFieldsEditor({ value, onChange }: { value: CustomField[]; onChang
           {value.map((r, i) => (
             <li key={i} className="grid grid-cols-[minmax(0,10rem)_minmax(0,1fr)_auto_auto] items-center gap-1.5">
               <Input value={r.label} onChange={(e) => set(i, { label: e.target.value })} placeholder="Label" className="h-8 text-sm" aria-label={`Field ${i + 1} label`} maxLength={60} />
-              <Input value={r.value} onChange={(e) => set(i, { value: e.target.value })} placeholder="Value" className="h-8 text-sm" aria-label={`Field ${i + 1} value`} />
+              <Input value={r.value} onChange={(e) => set(i, { value: e.target.value })} placeholder="Value" className="h-8 text-sm" aria-label={`Field ${i + 1} value`} maxLength={2000} />
               <label className="flex items-center gap-1.5 whitespace-nowrap px-1 text-xs text-muted" title="Never shown to players">
                 <Switch checked={r.dmOnly} onCheckedChange={(c) => set(i, { dmOnly: c })} aria-label={`Field ${i + 1} DM only`} /> DM only
               </label>
@@ -562,9 +567,11 @@ function CustomFieldsEditor({ value, onChange }: { value: CustomField[]; onChang
           ))}
         </ul>
       )}
-      <Button type="button" variant="ghost" size="sm" onClick={() => onChange([...value, { label: "", value: "", dmOnly: false }])}>
-        <Plus /> Add a field
-      </Button>
+      {value.length < 30 && (
+        <Button type="button" variant="ghost" size="sm" onClick={() => onChange([...value, { label: "", value: "", dmOnly: false }])}>
+          <Plus /> Add a field
+        </Button>
+      )}
     </section>
   );
 }

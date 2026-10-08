@@ -636,11 +636,14 @@ export function customFieldsOf(fields: FieldValues | null | undefined): CustomFi
 export function sanitizeFields(def: EntityTypeDef, input: FieldValues | null | undefined): FieldValues {
   const out: FieldValues = {};
   if (!input) return out;
-  const rawCustom = Array.isArray(input[CUSTOM_FIELDS_KEY])
-    ? (input[CUSTOM_FIELDS_KEY] as { label?: unknown; value?: unknown }[]).filter((r) => r && typeof r === "object" && String(r.label ?? "").trim() && String(r.value ?? "").trim())
-    : [];
-  const custom = customFieldsSchema.safeParse(rawCustom);
-  if (custom.success && custom.data.length) out[CUSTOM_FIELDS_KEY] = custom.data.filter((f) => f.value.trim());
+  // Normalise row by row so one over-long value can't wipe the others.
+  const rawCustom = Array.isArray(input[CUSTOM_FIELDS_KEY]) ? (input[CUSTOM_FIELDS_KEY] as { label?: unknown; value?: unknown; dmOnly?: unknown }[]) : [];
+  const custom = rawCustom
+    .filter((r) => r && typeof r === "object")
+    .map((r) => ({ label: String(r.label ?? "").trim().slice(0, 60), value: String(r.value ?? "").slice(0, 2000), dmOnly: r.dmOnly === true }))
+    .filter((r) => r.label && r.value.trim())
+    .slice(0, 30);
+  if (custom.length) out[CUSTOM_FIELDS_KEY] = custom;
   for (const f of def.fields) {
     let v = input[f.key];
     if (v === undefined || v === null || v === "") continue;

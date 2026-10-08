@@ -14,6 +14,7 @@ import {
   proposals,
   relationships,
   travelPlans,
+  worlds,
   type Proposal,
   type ProposalBatch,
   type ProposalSource,
@@ -228,8 +229,12 @@ function requireCampaign(ctx: ApplyCtx) {
   return ctx.campaignId;
 }
 
+/** "Now" for stamping applied changes: the campaign's clock, or the world's when there is no campaign. */
 async function campaignNow(db: DB, ctx: ApplyCtx) {
-  if (!ctx.campaignId) return null;
+  if (!ctx.campaignId) {
+    const [w] = await db.select({ currentAt: worlds.currentAt }).from(worlds).where(eq(worlds.id, ctx.worldId));
+    return w?.currentAt ?? null;
+  }
   const [c] = await db.select({ currentAt: campaigns.currentAt }).from(campaigns).where(eq(campaigns.id, ctx.campaignId));
   return c?.currentAt ?? null;
 }
@@ -449,6 +454,9 @@ async function applyOne(db: DB, ctx: ApplyCtx, item: Proposal): Promise<Ref[]> {
     }
     case "advance_clock": {
       const p = proposalPayloads.advance_clock.parse(raw);
+      // A batch is proposed for a span starting at a specific time; if the clock has moved since, it's stale.
+      const current = await campaignNow(db, ctx);
+      if (current !== null && current !== p.fromAt) throw new Error("The clock has moved since this was proposed. Advance the world again for an up-to-date set of developments.");
       if (!ctx.campaignId) {
         // World-level advance (no campaign): only the world clock moves.
         await setWorldTime(db, ctx.worldId, ctx.actor, p.toAt);
@@ -466,7 +474,7 @@ async function applyOne(db: DB, ctx: ApplyCtx, item: Proposal): Promise<Ref[]> {
       for (const x of arrivals) {
         await db
           .update(travelPlans)
-          .set({ status: "arrived", arrivedAt: p.toAt })
+          .set({ status: "arrived", arrivedAt: sql`least(${p.toAt}::bigint, coalesce(${travelPlans.departedAt}, ${p.fromAt}::bigint) + coalesce(${travelPlans.estimatedMinutes}, 0))` })
           .where(and(eq(travelPlans.id, x.travelId), eq(travelPlans.campaignId, campaignId), eq(travelPlans.worldId, ctx.worldId)));
       }
       return [{ kind: "campaign", id: campaignId }];

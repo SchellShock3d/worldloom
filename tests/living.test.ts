@@ -69,6 +69,35 @@ describe("offline session analysis", () => {
   });
 });
 
+describe("review fixes", () => {
+  it("doesn't invent quests called 'The' or move people to 'Old Town' from ordinary words", async () => {
+    const { user, actor, worldId, campaignId, byName } = await demo();
+    const s = await createSession(db, worldId, campaignId, actor, { title: "Odds and ends" });
+    await startSession(db, worldId, campaignId, actor, s.id);
+    await updateSession(db, worldId, campaignId, s.id, { notes: "The party accepted the job from Lady Marr.\nThey took on their quest with a sigh." });
+    await endSession(db, worldId, campaignId, actor, s.id);
+    const res = await processSessionNotes({ db, worldId, campaignId, userId: user.id, sessionId: s.id });
+    const batch = (await getBatch(db, worldId, res.batchId))!;
+    const names = batch.items.filter((i) => i.kind === "create_entity").map((i) => (i.payload as { entity: { name: string } }).entity.name);
+    expect(names.filter((n) => /^(the|their|this)$/i.test(n))).toEqual([]);
+    expect(await byName("Lady Marr")).toBeTruthy();
+  });
+
+  it("refuses a stale time-passes proposal once the clock has moved", async () => {
+    const { user, actor, worldId, campaignId } = await demo();
+    const cal = (await getCalendar(db, worldId)).definition;
+    const res = await advanceWorld({ db, worldId, campaignId, userId: user.id, minutes: durationToMinutes(cal, 1, "days") });
+    const [c0] = await db.select().from(campaigns).where(eq(campaigns.id, campaignId));
+    await setCampaignTime(db, worldId, campaignId, actor, c0!.currentAt + 60);
+    const batch = (await getBatch(db, worldId, res.batchId))!;
+    const clock = batch.items.find((i) => i.kind === "advance_clock")!;
+    const applied = await applyProposals(db, worldId, res.batchId, [clock.id], user.id);
+    expect(applied.failed.length).toBe(1);
+    const [c1] = await db.select().from(campaigns).where(eq(campaigns.id, campaignId));
+    expect(c1!.currentAt).toBe(c0!.currentAt + 60);
+  });
+});
+
 describe("the dead stay dead", () => {
   it("doesn't let a dead character carry out a consequence when time advances", async () => {
     const { user, actor, worldId, campaignId, byName } = await demo();

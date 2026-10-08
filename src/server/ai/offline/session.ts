@@ -66,19 +66,23 @@ export async function offlineProcessSession(
   // Entities mentioned per line: explicit tokens plus plain names.
   const perLine: { raw: string; text: string; ids: string[] }[] = [];
   const allIds = new Set<string>();
-  // Notes say "Varo" for "Captain Varo": also match names without their title, when that's unambiguous.
+  // Notes say "Varo" for "Captain Varo": also match people's names without their title, when that's
+  // unambiguous. Short forms only match capitalised, so "back to town" never means "Old Town".
   const TITLE = /^(captain|lady|lord|sister|brother|king|queen|prince|princess|sir|dame|master|mistress|father|mother|old|duke|duchess|baron|baroness|count|countess|high priest|priestess|commander|general|magister)\s+/i;
+  const personIds = new Set(
+    (await db.select({ id: entities.id }).from(entities).where(and(eq(entities.worldId, opts.worldId), inArray(entities.type, ["npc", "pc", "creature"])))).map((r) => r.id),
+  );
   const short = new Map<string, { id: string; name: string } | null>();
   for (const e of index) {
+    if (!personIds.has(e.id)) continue;
     const m = e.name.match(TITLE);
     if (!m) continue;
     const rest = e.name.slice(m[0].length);
-    if (rest.length < 3 || index.some((o) => o.name.toLowerCase() === rest.toLowerCase())) continue;
+    if (rest.length < 3 || !/^\p{Lu}/u.test(rest) || index.some((o) => o.name.toLowerCase() === rest.toLowerCase())) continue;
     short.set(rest.toLowerCase(), short.has(rest.toLowerCase()) ? null : { id: e.id, name: rest });
   }
-  const sortedNames = [...index, ...[...short.values()].filter((v): v is { id: string; name: string } => !!v)]
-    .filter((e) => e.name.length > 2)
-    .sort((a, b) => b.name.length - a.name.length);
+  const shortNames = [...short.values()].filter((v): v is { id: string; name: string } => !!v);
+  const sortedNames = [...index].filter((e) => e.name.length > 2).sort((a, b) => b.name.length - a.name.length);
   const unresolvedNew = new Map<string, string>(); // name → line
   for (const raw of lines) {
     const ids = new Set<string>();
@@ -89,6 +93,10 @@ export async function offlineProcessSession(
       const n = e.name.toLowerCase();
       const i = lower.indexOf(n);
       if (i >= 0 && !/[\p{L}]/u.test(lower[i - 1] ?? " ") && !/[\p{L}]/u.test(lower[i + n.length] ?? " ")) ids.add(e.id);
+    }
+    for (const e of shortNames) {
+      const i = plain.indexOf(e.name);
+      if (i >= 0 && !/[\p{L}]/u.test(plain[i - 1] ?? " ") && !/[\p{L}]/u.test(plain[i + e.name.length] ?? " ")) ids.add(e.id);
     }
     // "@New Person" that didn't resolve to anything known.
     for (const m of plain.matchAll(/@([A-Z][\p{L}'-]+(?: [A-Z][\p{L}'-]+){0,2})/gu)) {
@@ -194,9 +202,10 @@ export async function offlineProcessSession(
     // "Accepted the Sun Crown quest" with no quest of that name yet: draft one.
     const nq = !quests.length ? t.match(RULES.newQuest) : null;
     if (nq) {
-      const title = nq[1]!.replace(/^(the|a|an)\s+/i, "").replace(/^\w/, (c) => c.toUpperCase());
+      const title = nq[1]!.replace(/^((the|a|an|their|this|that|his|her|our|my|your|its|another|some)\s+)+/i, "").replace(/^\w/, (c) => c.toUpperCase());
       const qref = `quest-${title.toLowerCase().replace(/\W+/g, "-")}`;
-      if (!cs.newEntities.some((e) => e.ref === qref)) {
+      const determiner = /^(the|a|an|their|this|that|his|her|our|my|your|its|another|some|new|same)$/i.test(title);
+      if (title.length >= 3 && !determiner && !cs.newEntities.some((e) => e.ref === qref)) {
         const giver = people.find((p) => byId.get(p)?.type === "npc");
         cs.newEntities.push({
           ref: qref,

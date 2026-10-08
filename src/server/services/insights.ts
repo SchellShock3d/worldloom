@@ -198,8 +198,8 @@ export async function forgottenThreads(db: DB, worldId: string, campaignId: stri
 // ---------------------------------------------------------------------------
 
 // Postgres regexes (\\m = start of word), matched against an event's name and summary.
-const DEATH_WORDS = "\\m(kill|died|dies|death|dead|slain|slay|murder|executed|perish|falls|fell|cut down|struck down)";
-const AFTERLIFE_WORDS = "\\m(funeral|burial|buried|mourn|memorial|wake|ghost|spirit|undead|haunt|legacy|remains|corpse|tomb|grave|inherit|avenge|revenge)";
+const DEATH_WORDS = "\\m(kill|kills|killed|killing|died|dies|dead|death|slain|slay|slays|slew|murder|murders|murdered|executed|execution|perished|perishes|cut down|struck down)\\M";
+const AFTERLIFE_WORDS = "\\m(funeral|funerals|burial|buried|mourn|mourns|mourned|mourning|memorial|ghost|ghosts|spirit|undead|haunt|haunts|haunted|haunting|legacy|remains|corpse|tomb|grave|graves|inherit|inherits|inherited|inheritance|avenge|avenges|avenged|revenge)\\M";
 
 export async function continuityIssues(db: DB, worldId: string, campaignId: string | null, calendar: CalendarDefinition): Promise<Insight[]> {
   const out: Insight[] = [];
@@ -217,13 +217,27 @@ export async function continuityIssues(db: DB, worldId: string, campaignId: stri
       .select({ id: entities.id, name: entities.name, type: entities.type })
       .from(entities)
       .where(and(eq(entities.worldId, worldId), eq(entities.status, "dead"), inArray(entities.type, ["npc", "pc", "creature"])));
-    const all = uniqueBy([...dead, ...canonDead.map((d) => ({ ...d, deadSince: null as Date | null }))], (d) => d.id);
+    // A campaign can bring someone back: canon deaths it overrides with another status don't count here.
+    const revived = campaignId && canonDead.length
+      ? new Set(
+          (
+            await db
+              .select({ id: campaignEntityStates.entityId, status: campaignEntityStates.status })
+              .from(campaignEntityStates)
+              .where(and(eq(campaignEntityStates.campaignId, campaignId), inArray(campaignEntityStates.entityId, canonDead.map((d) => d.id))))
+          )
+            .filter((o) => o.status && o.status !== "dead")
+            .map((o) => o.id),
+        )
+      : new Set<string>();
+    const all = uniqueBy([...dead, ...canonDead.filter((d) => !revived.has(d.id)).map((d) => ({ ...d, deadSince: null as Date | null }))], (d) => d.id);
     if (all.length) {
       const idList = `{${all.map((a) => a.id).join(",")}}`;
       const deathEvents = await db.execute(sql`
         select r.target_id as entity_id, max(e2.start_at) as died_at
         from relationships r join events e2 on e2.entity_id = r.source_id join entities ev on ev.id = e2.entity_id
         where r.type = 'involves' and r.target_id = any(${idList}::uuid[]) and ev.world_id = ${worldId}
+          and (ev.campaign_id is null or ${campaignId}::uuid is null or ev.campaign_id = ${campaignId}::uuid)
           and (ev.name || ' ' || ev.summary) ~* ${DEATH_WORDS}
         group by r.target_id`);
       const diedAt = new Map(rowsOf<{ entity_id: string; died_at: number }>(deathEvents).map((r) => [r.entity_id, Number(r.died_at)]));

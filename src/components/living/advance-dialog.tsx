@@ -78,7 +78,7 @@ export function AdvanceDialog({ open, onOpenChange, campaignId, defaultNote }: {
           </div>
           <div className="flex items-end gap-2">
             <Field label="Custom" htmlFor="adv-amount" className="w-28">
-              <Input id="adv-amount" type="number" min={1} max={1000} value={amount} onChange={(e) => setAmount(Math.max(1, Number(e.target.value) || 1))} />
+              <Input id="adv-amount" type="number" min={1} max={1000} step={1} value={amount} onChange={(e) => setAmount(Math.min(1000, Math.max(1, Math.round(Number(e.target.value) || 1))))} />
             </Field>
             <NativeSelect value={unit} onChange={(e) => setUnit(e.target.value as AdvanceUnit)} className="w-36" aria-label="Unit">
               <option value="hours">hours</option>

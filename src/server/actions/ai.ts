@@ -93,7 +93,7 @@ export async function processSessionAction(worldId: string, campaignId: string, 
 export async function advanceWorldAction(worldId: string, campaignId: string | null, input: { amount: number; unit: AdvanceUnit; note?: string }) {
   return run(async () => {
     const { user, calendar, world, campaignId: cid } = await authorizeScope(worldId, campaignId, "editor");
-    const amount = z.number().int().min(1, "Choose an amount between 1 and 1000.").max(1000, "Choose an amount between 1 and 1000.").parse(input.amount);
+    const amount = z.number().int("Use a whole number of hours, days, weeks…").min(1, "Choose an amount between 1 and 1000.").max(1000, "Choose an amount between 1 and 1000.").parse(input.amount);
     const unit = z.enum(["minutes", "hours", "days", "weeks", "months", "years"]).parse(input.unit);
     const db = await getDb();
     const from = cid ? (await loadWorldBundle(db, worldId, cid)).now : world.currentAt;
