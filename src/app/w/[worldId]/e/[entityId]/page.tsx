@@ -19,7 +19,7 @@ import { EntityActions } from "@/components/entity/entity-actions";
 import { RelationshipsPanel, KnowledgePanel } from "@/components/entity/relations-panel";
 import { QuestPanel, ThreadPanel, CluesPanel, RumourPanel, EventPanel } from "@/components/entity/extension-panels";
 import { MetricsPanel, CampaignStatePanel, HistoryPanel } from "@/components/entity/side-panels";
-import { ShortFields, LongFields } from "@/components/entity/fields-view";
+import { ShortFields, LongFields, hasShortFields } from "@/components/entity/fields-view";
 import { getEntityType } from "@/lib/entity-types";
 
 const VIS_LABEL: Record<string, string> = { dm_only: "DM only", secret: "Secret", partially_known: "Partially known", discovered: "Discovered", public: "Public" };
@@ -134,7 +134,7 @@ export default async function EntityPage({ params }: { params: Promise<{ worldId
           )}
           {ext?.kind === "rumour" && ext.rumour && (
             <div className="mb-6">
-              <RumourPanel claim={ext.rumour.claim} truth={ext.rumour.truth} accuracy={ext.rumour.accuracy} distortion={ext.rumour.distortion} origin={ext.origin} />
+              <RumourPanel claim={ext.rumour.claim} truth={ext.rumour.truth} accuracy={ext.rumour.accuracy} distortion={ext.rumour.distortion} origin={ext.origin} startedAt={ext.rumour.startedAt} expiresAt={ext.rumour.expiresAt} />
             </div>
           )}
           {ext?.kind === "event" && ext.event && (
@@ -255,7 +255,7 @@ export default async function EntityPage({ params }: { params: Promise<{ worldId
         </div>
 
         <aside className="flex min-w-0 flex-col gap-5">
-          {(def.fields.length > 0 || entity.locationId) && (
+          {(hasShortFields(def, entity.fields) || d.tags.length > 0) && (
             <Panel className="px-4 py-3">
               <SectionTitle>Details</SectionTitle>
               <ShortFields def={def} fields={entity.fields} />

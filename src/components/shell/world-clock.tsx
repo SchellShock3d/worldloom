@@ -40,12 +40,12 @@ export function WorldClock({ onAdvance }: { onAdvance?: () => void }) {
     <Popover>
       <PopoverTrigger asChild>
         <button
-          className="flex h-8 items-center gap-2 rounded-md border border-line bg-surface px-2.5 text-sm hover:border-line-strong"
+          className="flex h-8 shrink-0 items-center gap-2 whitespace-nowrap rounded-md border border-line bg-surface px-2 text-sm hover:border-line-strong sm:px-2.5"
           aria-label={`In-world date: ${formatDate(cal, now)}`}
         >
           {moon && <MoonGlyph phase={moon.phase} illumination={moon.illumination} color={moon.color} />}
-          <span className="font-medium tabular">{r.monthName && formatShort(cal, now)}</span>
-          <span className="hidden text-faint sm:inline">{timeOfDay(cal, now)}</span>
+          <span className="hidden font-medium tabular min-[440px]:inline">{r.monthName && formatShort(cal, now)}</span>
+          <span className="hidden text-faint md:inline">{timeOfDay(cal, now)}</span>
         </button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-80 p-0">

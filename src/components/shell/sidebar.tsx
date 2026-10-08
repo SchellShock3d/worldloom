@@ -14,7 +14,9 @@ import {
   GitBranch,
   History,
   Inbox,
+  Languages,
   LayoutDashboard,
+  Megaphone,
   Map as MapIcon,
   Mountain,
   Music,
@@ -83,6 +85,7 @@ export function Sidebar({ worlds, pendingProposals, mobileOpen, onMobileClose }:
     { href: `${base}/factions`, label: "Factions & faiths", icon: Swords },
     { href: `${base}/items`, label: "Items", icon: Gem },
     { href: `${base}/bestiary`, label: "Bestiary", icon: PawPrint },
+    { href: `${base}/culture`, label: "Cultures & languages", icon: Languages },
     { href: `${base}/maps`, label: "Maps", icon: MapIcon },
     { href: `${base}/timeline`, label: "Timeline", icon: History },
     { href: `${base}/calendar`, label: "Calendar", icon: CalendarDays },
@@ -91,6 +94,7 @@ export function Sidebar({ worlds, pendingProposals, mobileOpen, onMobileClose }:
   const livingNav: NavItem[] = [
     { href: `${base}/threads`, label: "World threads", icon: Spline },
     { href: `${base}/news`, label: "World news", icon: Newspaper },
+    { href: `${base}/rumours`, label: "Rumours", icon: Megaphone },
     { href: `${base}/proposals`, label: "Proposals", icon: Inbox, badge: pendingProposals },
     { href: `${base}/continuity`, label: "Continuity", icon: TriangleAlert },
   ];

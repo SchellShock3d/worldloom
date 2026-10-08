@@ -29,6 +29,7 @@ export function Markdown({
   variant = "lore",
   worldId,
   linkBase,
+  newTab = false,
 }: {
   children: string;
   refs?: RefMap;
@@ -39,6 +40,8 @@ export function Markdown({
   worldId?: string;
   /** Where @mention links point (defaults to the DM wiki: /w/:world/e). */
   linkBase?: string;
+  /** Open entity links in a new tab (Run Session keeps its screen, notes and music). */
+  newTab?: boolean;
 }) {
   const w = useOptionalWorld();
   const wid = worldId ?? w?.worldId;
@@ -53,7 +56,7 @@ export function Markdown({
           // In the player view an unknown mention is just text: players shouldn't learn that a page exists.
           if (refs && !ref) return playerView ? <span>{kids}</span> : <span className="mention mention--missing" title="This entity no longer exists">{kids}</span>;
           return (
-            <Link href={linkBase ? `${linkBase}/${id}` : wid ? `/w/${wid}/e/${id}` : "#"} className="mention" style={tone ? ({ "--mention-color": tone } as React.CSSProperties) : undefined} title={ref?.summary || undefined}>
+            <Link href={linkBase ? `${linkBase}/${id}` : wid ? `/w/${wid}/e/${id}` : "#"} {...(newTab ? { target: "_blank", rel: "noopener" } : {})} className="mention" style={tone ? ({ "--mention-color": tone } as React.CSSProperties) : undefined} title={ref?.summary || undefined}>
               {ref?.name ?? kids}
             </Link>
           );
@@ -66,7 +69,7 @@ export function Markdown({
         );
       },
     }),
-    [refs, wid, linkBase, playerView],
+    [refs, wid, linkBase, playerView, newTab],
   );
   const cls = cn("lore", variant === "compact" && "lore--compact", variant === "sans" && "lore--sans", className);
   if (!segments.length) return null;

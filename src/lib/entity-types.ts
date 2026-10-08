@@ -617,9 +617,30 @@ function schemaForField(f: FieldDef): z.ZodType {
  * Validate and normalise type-specific field values. Unknown keys are dropped,
  * empty strings removed, and numeric strings coerced.
  */
+/** One-off fields the DM adds to a single entry, stored under a reserved key in `fields`. */
+export const CUSTOM_FIELDS_KEY = "_custom";
+export interface CustomField {
+  label: string;
+  value: string;
+  dmOnly: boolean;
+}
+const customFieldsSchema = z
+  .array(z.object({ label: z.string().trim().min(1).max(60), value: z.string().max(2000), dmOnly: z.boolean().default(false) }))
+  .max(30);
+
+export function customFieldsOf(fields: FieldValues | null | undefined): CustomField[] {
+  const parsed = customFieldsSchema.safeParse(fields?.[CUSTOM_FIELDS_KEY]);
+  return parsed.success ? parsed.data.filter((f) => f.value.trim()) : [];
+}
+
 export function sanitizeFields(def: EntityTypeDef, input: FieldValues | null | undefined): FieldValues {
   const out: FieldValues = {};
   if (!input) return out;
+  const rawCustom = Array.isArray(input[CUSTOM_FIELDS_KEY])
+    ? (input[CUSTOM_FIELDS_KEY] as { label?: unknown; value?: unknown }[]).filter((r) => r && typeof r === "object" && String(r.label ?? "").trim() && String(r.value ?? "").trim())
+    : [];
+  const custom = customFieldsSchema.safeParse(rawCustom);
+  if (custom.success && custom.data.length) out[CUSTOM_FIELDS_KEY] = custom.data.filter((f) => f.value.trim());
   for (const f of def.fields) {
     let v = input[f.key];
     if (v === undefined || v === null || v === "") continue;

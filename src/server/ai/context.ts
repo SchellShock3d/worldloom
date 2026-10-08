@@ -27,7 +27,7 @@ import {
   type World,
 } from "@/server/db/schema";
 import { DEFAULT_CALENDAR, formatDate, timeOfDay, resolve, type CalendarDefinition } from "@/lib/calendar";
-import { fieldToText, getEntityType } from "@/lib/entity-types";
+import { customFieldsOf, fieldToText, getEntityType } from "@/lib/entity-types";
 import { mentionsToPlain, toPlayerMarkdown } from "@/lib/mentions";
 import { truncate } from "@/lib/utils";
 import { searchWorld } from "@/server/services/search";
@@ -218,6 +218,10 @@ export async function entityCard(
     const v = e.fields[f.key];
     if (v === undefined || v === null || v === "") continue;
     lines.push(`- ${f.label}${f.section === "dm" ? " (DM only)" : ""}: ${truncate(fieldToText(f, v).replace(/\s+/g, " "), 300)}`);
+  }
+  for (const c of customFieldsOf(e.fields)) {
+    if (opts.playerSafe && c.dmOnly) continue;
+    lines.push(`- ${c.label}${c.dmOnly ? " (DM only)" : ""}: ${truncate(c.value.replace(/\s+/g, " "), 300)}`);
   }
   const body = opts.playerSafe ? toPlayerMarkdown(e.body) : e.body;
   if (body.trim()) lines.push(truncate(mentionsToPlain(body).replace(/\n{2,}/g, "\n"), opts.bodyChars ?? 700));

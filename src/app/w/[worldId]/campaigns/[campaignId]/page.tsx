@@ -110,7 +110,7 @@ export default async function CampaignDashboard({ params }: { params: Promise<{ 
                 {party.map((p) => {
                   const f = p.fields as Record<string, string | number | undefined>;
                   return (
-                    <li key={p.id} className="bg-surface">
+                    <li key={p.id} className="bg-surface sm:[&:nth-child(odd):last-child]:col-span-2">
                       <Link href={`${base}/e/${p.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-surface-2/60">
                         <TypeIcon type="pc" />
                         <span className="min-w-0 flex-1">

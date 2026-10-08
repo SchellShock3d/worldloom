@@ -26,6 +26,9 @@ import { formatDate, formatTime, timeOfDay, type AdvanceUnit } from "@/lib/calen
 import type { RunData } from "@/server/services/run-data";
 import { cn } from "@/lib/utils";
 
+/** Links from the run screen open in a new tab so notes, timers and music keep going. */
+const NEW_TAB = { target: "_blank", rel: "noopener" } as const;
+
 export function RunSession({ campaign, data }: { campaign: { id: string; name: string; currentWeather: string; partyInventory: string }; data: RunData }) {
   const w = useWorld();
   const router = useRouter();
@@ -37,6 +40,15 @@ export function RunSession({ campaign, data }: { campaign: { id: string; name: s
   const [title, setTitle] = React.useState(session.title);
   const [sceneDraft, setSceneDraft] = React.useState<SceneDraft | null>(null);
   const [ending, setEnding] = React.useState(false);
+  const [tab, setTab] = React.useState(data.activeEncounter?.status === "active" ? "combat" : "here");
+  // The Scenes tab only exists below the large breakpoint (the rail shows them above it).
+  React.useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const sync = () => mq.matches && setTab((t) => (t === "scenes" ? "here" : t));
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
   const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestNotes = React.useRef(notes);
   const base = `/w/${w.worldId}`;
@@ -109,67 +121,14 @@ export function RunSession({ campaign, data }: { campaign: { id: string; name: s
     encounterId: s.encounterId,
     audioProfileId: s.audioProfileId,
     sessionId: s.sessionId,
+    atTime: s.atTime,
   });
   const sessionScenes = data.scenes.filter((s) => s.sessionId === session.id || (!s.sessionId && s.status !== "done"));
-
-  return (
-    <div className="flex h-full flex-col">
-      {/* Session bar */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line bg-surface px-4 py-2">
-        <div className="flex min-w-0 items-center gap-2">
-          <Badge tone="ember">
-            <span className="size-1.5 animate-pulse rounded-full bg-ember" /> Live
-          </Badge>
-          <span className="text-sm text-faint">Session {session.number}</span>
-          <input
-            aria-label="Session title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            onBlur={() => title !== session.title && updateSessionAction(w.worldId, campaign.id, session.id, { title })}
-            placeholder="Untitled"
-            className="min-w-0 max-w-64 rounded bg-transparent px-1 font-serif text-lg font-semibold outline-none hover:bg-surface-2 focus:bg-surface-2"
-          />
-        </div>
-        <div className="flex items-center gap-1.5 text-sm">
-          <Timer className="size-4 text-brass" />
-          <span className="font-medium tabular">{formatTime(w.calendar, now)}</span>
-          <span className="text-faint">
-            {timeOfDay(w.calendar, now)}, {formatDate(w.calendar, now)}
-          </span>
-        </div>
-        <div className="flex items-center gap-1">
-          {(
-            [
-              [10, "minutes", "+10m", "10 minutes"],
-              [1, "hours", "+1h", "An hour"],
-              [8, "hours", "Rest", "8 hours"],
-              [1, "days", "+1d", "A day"],
-            ] as [number, AdvanceUnit, string, string][]
-          ).map(([a, u, l, label]) => (
-            <Tooltip key={l} content={`Advance ${label.toLowerCase()}`}>
-              <button onClick={() => advance(a, u, label)} className="h-7 rounded border border-line px-2 text-xs font-medium tabular text-muted hover:border-line-strong hover:text-fg">
-                {l}
-              </button>
-            </Tooltip>
-          ))}
-        </div>
-        {campaign.currentWeather && (
-          <span className="hidden items-center gap-1.5 text-sm text-muted xl:flex">
-            <CloudSun className="size-4 text-brass" /> {campaign.currentWeather}
-          </span>
-        )}
-        <div className="flex-1" />
-        <Button variant="danger" size="sm" onClick={() => setEnding(true)}>
-          <Flag /> End session
-        </Button>
-      </div>
-
-      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[17rem_minmax(0,1fr)_25rem]">
-        {/* Scenes */}
-        <aside className="hidden min-h-0 flex-col overflow-y-auto border-r border-line lg:flex">
+  const scenesPanel = (
+    <>
           <div className="flex items-center justify-between px-3 pb-1 pt-3">
             <h2 className="text-sm font-semibold text-muted">Scenes</h2>
-            <Button variant="ghost" size="icon-sm" onClick={() => setSceneDraft(emptyScene(session.id))} aria-label="New scene">
+            <Button variant="ghost" size="icon-sm" onClick={() => setSceneDraft(emptyScene(session.id, now))} aria-label="New scene">
               <Plus />
             </Button>
           </div>
@@ -198,7 +157,7 @@ export function RunSession({ campaign, data }: { campaign: { id: string; name: s
                         </p>
                       )}
                     </div>
-                    <button onClick={() => setSceneDraft(toDraft(s))} className="shrink-0 rounded p-0.5 text-faint opacity-0 hover:text-fg group-hover:opacity-100" aria-label="Edit scene">
+                    <button onClick={() => setSceneDraft(toDraft(s))} className="shrink-0 rounded p-0.5 text-faint hover-reveal hover:text-fg" aria-label="Edit scene">
                       <Pencil className="size-3.5" />
                     </button>
                   </div>
@@ -219,13 +178,71 @@ export function RunSession({ campaign, data }: { campaign: { id: string; name: s
               </dl>
               {scene.description && (
                 <div className="mt-2">
-                  <Markdown refs={data.refs} variant="compact">
+                  <Markdown refs={data.refs} variant="compact" newTab>
                     {scene.description}
                   </Markdown>
                 </div>
               )}
             </div>
           )}
+    </>
+  );
+
+  return (
+    <div className="flex h-full flex-col">
+      {/* Session bar */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line bg-surface px-4 py-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <Badge tone="ember">
+            <span className="size-1.5 animate-pulse rounded-full bg-ember" /> Live
+          </Badge>
+          <span className="text-sm text-faint">Session {session.number}</span>
+          <input
+            aria-label="Session title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onBlur={() => title !== session.title && updateSessionAction(w.worldId, campaign.id, session.id, { title })}
+            placeholder="Untitled"
+            className="min-w-0 max-w-40 rounded bg-transparent px-1 font-serif text-lg font-semibold outline-none hover:bg-surface-2 focus:bg-surface-2 sm:max-w-64"
+          />
+        </div>
+        <div className="flex items-center gap-1.5 text-sm">
+          <Timer className="size-4 text-brass" />
+          <span className="font-medium tabular">{formatTime(w.calendar, now)}</span>
+          <span className="hidden text-faint xl:inline">
+            {timeOfDay(w.calendar, now)}, {formatDate(w.calendar, now)}
+          </span>
+        </div>
+        <div className="flex items-center gap-1">
+          {(
+            [
+              [10, "minutes", "+10m", "10 minutes"],
+              [1, "hours", "+1h", "An hour"],
+              [8, "hours", "Rest", "8 hours"],
+              [1, "days", "+1d", "A day"],
+            ] as [number, AdvanceUnit, string, string][]
+          ).map(([a, u, l, label]) => (
+            <Tooltip key={l} content={`Advance ${label.toLowerCase()}`}>
+              <button onClick={() => advance(a, u, label)} className="h-7 rounded border border-line px-2 text-xs font-medium tabular text-muted hover:border-line-strong hover:text-fg">
+                {l}
+              </button>
+            </Tooltip>
+          ))}
+        </div>
+        {campaign.currentWeather && (
+          <span className="hidden min-w-0 max-w-xs items-center gap-1.5 text-sm text-muted 2xl:flex" title={campaign.currentWeather}>
+            <CloudSun className="size-4 shrink-0 text-brass" /> <span className="truncate">{campaign.currentWeather}</span>
+          </span>
+        )}
+        <Button variant="danger" size="sm" onClick={() => setEnding(true)} className="ml-auto">
+          <Flag /> End session
+        </Button>
+      </div>
+
+      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[17rem_minmax(0,1fr)_25rem]">
+        {/* Scenes */}
+        <aside className="hidden min-h-0 flex-col overflow-y-auto border-r border-line lg:flex">
+          {scenesPanel}
         </aside>
 
         {/* Notes */}
@@ -252,7 +269,7 @@ export function RunSession({ campaign, data }: { campaign: { id: string; name: s
               <details className="rounded-lg border border-line bg-surface">
                 <summary className="cursor-pointer select-none px-4 py-2 text-sm font-medium text-muted">Your prep for this session</summary>
                 <div className="px-4 pb-4">
-                  <Markdown refs={data.refs} variant="compact">
+                  <Markdown refs={data.refs} variant="compact" newTab>
                     {session.prep}
                   </Markdown>
                 </div>
@@ -263,39 +280,43 @@ export function RunSession({ campaign, data }: { campaign: { id: string; name: s
 
         {/* Tools */}
         <aside className="flex min-h-0 flex-col border-l border-line">
-          <Tabs defaultValue={data.activeEncounter?.status === "active" ? "combat" : "here"} className="flex min-h-0 flex-1 flex-col">
-            <TabsList className="shrink-0 overflow-x-auto px-2">
-              <TabsTrigger value="here">
-                <Users /> Here
-              </TabsTrigger>
-              <TabsTrigger value="party">
-                <ShieldUser /> Party
-              </TabsTrigger>
-              <TabsTrigger value="story">
-                <ScrollText /> Story
-              </TabsTrigger>
-              <TabsTrigger value="combat">
-                <Swords /> Combat
-              </TabsTrigger>
-              <TabsTrigger value="tools">
-                <Dices /> Tools
-              </TabsTrigger>
-              <TabsTrigger value="music">
-                <Music />
-              </TabsTrigger>
-              <TabsTrigger value="ai">
-                <Sparkles />
-              </TabsTrigger>
+          <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col">
+            <TabsList className="grid shrink-0 auto-cols-fr grid-flow-col px-1">
+              {(
+                [
+                  ["scenes", Clapperboard, "Scenes", "lg:hidden"],
+                  ["here", Users, "Here", ""],
+                  ["party", ShieldUser, "Party", ""],
+                  ["story", ScrollText, "Story", ""],
+                  ["combat", Swords, "Combat", ""],
+                  ["tools", Dices, "Tools", ""],
+                  ["music", Music, "Music", ""],
+                  ["ai", Sparkles, "Copilot", ""],
+                ] as const
+              ).map(([value, Icon, label, cls]) => (
+                <TabsTrigger key={value} value={value} className={cn("h-auto min-w-0 flex-col gap-0.5 px-1 py-1.5 text-2xs", cls)}>
+                  <Icon /> <span className="max-w-full truncate">{label}</span>
+                </TabsTrigger>
+              ))}
             </TabsList>
             <div className="min-h-0 flex-1 overflow-y-auto p-3">
+              <TabsContent value="scenes" className="-m-3 flex flex-col lg:hidden">
+                {scenesPanel}
+              </TabsContent>
+
               <TabsContent value="here" className="flex flex-col gap-3">
+                {campaign.currentWeather && (
+                  <p className="flex items-center gap-1.5 text-sm text-muted 2xl:hidden">
+                    <CloudSun className="size-3.5 shrink-0 text-brass" /> {campaign.currentWeather}
+                  </p>
+                )}
                 {data.chain.length > 0 && (
                   <p className="flex flex-wrap items-center gap-1 text-sm text-muted">
                     <MapPin className="size-3.5 text-places" />
                     {data.chain.map((c, i) => (
                       <React.Fragment key={c.id}>
                         {i > 0 && <span className="text-faint">›</span>}
-                        <Link href={`${base}/e/${c.id}`} className="hover:text-fg">
+                        <Link {...NEW_TAB} href={`${base}/e/${c.id}`} className="hover:text-fg">
                           {c.name}
                         </Link>
                       </React.Fragment>
@@ -310,11 +331,11 @@ export function RunSession({ campaign, data }: { campaign: { id: string; name: s
                     return (
                       <div key={e.id} className="rounded-lg border border-line bg-surface p-3">
                         <div className="flex items-center justify-between gap-2">
-                          <Link href={`${base}/e/${e.id}`} className="flex items-center gap-2 font-medium hover:text-accent">
+                          <Link {...NEW_TAB} href={`${base}/e/${e.id}`} className="flex items-center gap-2 font-medium hover:text-accent">
                             <TypeIcon type={e.type} /> {e.name}
                           </Link>
                           {e.type === "npc" && (
-                            <Link href={`${base}/ai?roleplay=${e.id}`} className="text-xs text-brass hover:underline">
+                            <Link {...NEW_TAB} href={`${base}/ai?roleplay=${e.id}`} className="text-xs text-brass hover:underline">
                               Roleplay
                             </Link>
                           )}
@@ -383,7 +404,7 @@ export function RunSession({ campaign, data }: { campaign: { id: string; name: s
                   {data.quests.length === 0 && <p className="text-sm text-faint">No active quests.</p>}
                   {data.quests.map((q) => (
                     <div key={q.id} className="mb-2">
-                      <Link href={`${base}/e/${q.id}`} className="text-sm font-medium hover:text-accent">
+                      <Link {...NEW_TAB} href={`${base}/e/${q.id}`} className="text-sm font-medium hover:text-accent">
                         {q.name}
                       </Link>
                       <ul className="mt-0.5">
@@ -411,7 +432,7 @@ export function RunSession({ campaign, data }: { campaign: { id: string; name: s
                   {data.mysteries.length === 0 && <p className="text-sm text-faint">No open mysteries.</p>}
                   {data.mysteries.map((m) => (
                     <div key={m.id} className="mb-2">
-                      <Link href={`${base}/e/${m.id}`} className="text-sm font-medium hover:text-accent">
+                      <Link {...NEW_TAB} href={`${base}/e/${m.id}`} className="text-sm font-medium hover:text-accent">
                         {m.name}
                       </Link>
                       <ul className="mt-0.5">
@@ -444,7 +465,7 @@ export function RunSession({ campaign, data }: { campaign: { id: string; name: s
                 {data.activeEncounter ? (
                   <>
                     <div className="flex items-center justify-between gap-2">
-                      <Link href={`${base}/encounters/${data.activeEncounter.id}`} className="font-medium hover:text-accent">
+                      <Link {...NEW_TAB} href={`${base}/encounters/${data.activeEncounter.id}`} className="font-medium hover:text-accent">
                         {data.activeEncounter.name}
                       </Link>
                     </div>
@@ -463,7 +484,7 @@ export function RunSession({ campaign, data }: { campaign: { id: string; name: s
                     ))}
                     {data.encounters.length === 0 && <p className="text-sm text-faint">No encounters prepared.</p>}
                     <Button asChild variant="ghost" size="sm" className="self-start">
-                      <Link href={`${base}/encounters?new=1`}>
+                      <Link {...NEW_TAB} href={`${base}/encounters?new=1`}>
                         <Plus /> New encounter
                       </Link>
                     </Button>

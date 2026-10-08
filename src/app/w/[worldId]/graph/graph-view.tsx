@@ -42,6 +42,13 @@ function edgeColor(type: string, derived?: boolean) {
   return "var(--text-faint)";
 }
 
+/** Changes whenever nodes move, so label placement re-runs after drags. */
+function frameKey(sim: { nodes: { x?: number; y?: number }[] }) {
+  let h = 0;
+  for (const n of sim.nodes) h = (h * 31 + Math.round((n.x ?? 0) / 8) * 7 + Math.round((n.y ?? 0) / 8)) | 0;
+  return h;
+}
+
 export function GraphView({
   nodes: nodesIn,
   edges: edgesIn,
@@ -69,6 +76,9 @@ export function GraphView({
   const [hover, setHover] = React.useState<string | null>(null);
   const [query, setQuery] = React.useState("");
   const [, setFrame] = React.useState(0);
+  // The force layout is floating-point work that differs between server and browser: draw it only in the browser.
+  const [mounted, setMounted] = React.useState(false);
+  React.useEffect(() => setMounted(true), []);
   const drag = React.useRef<{ kind: "pan" | "node"; id?: string; sx: number; sy: number; vx: number; vy: number; moved: boolean } | null>(null);
 
   const push = (patch: Record<string, string | null>) => {
@@ -132,8 +142,8 @@ export function GraphView({
     setView({ s, x: el.clientWidth / 2 - ((minX + maxX) / 2) * s, y: el.clientHeight / 2 - ((minY + maxY) / 2) * s });
   }, [sim]);
   React.useEffect(() => {
-    fit();
-  }, [fit]);
+    if (mounted) fit();
+  }, [fit, mounted]);
 
   const zoomAt = (factor: number, cx?: number, cy?: number) => {
     const el = container.current;
@@ -223,12 +233,33 @@ export function GraphView({
         .sort((a, b) => a.label.localeCompare(b.label) || a.other.name.localeCompare(b.other.name))
     : [];
 
-  const showLabel = (n: N) => view.s > 1.1 || n.importance > 0 || n.degree >= 3 || (neighbours?.has(n.id) ?? false) || n.id === focus?.id;
+  // Greedy label placement: the most important names first, skipping any that would overlap one already placed.
+  const labelled = React.useMemo(() => {
+    const out = new Set<string>();
+    const placed: { x1: number; y1: number; x2: number; y2: number }[] = [];
+    const font = 11 / Math.sqrt(Math.max(view.s, 0.6));
+    const priority = (n: N) => (n.id === selected || n.id === hover || n.id === focus?.id ? 1000 : 0) + (neighbours?.has(n.id) ? 500 : 0) + n.importance * 20 + n.degree;
+    for (const n of [...sim.nodes].sort((a, b) => priority(b) - priority(a))) {
+      const must = n.id === selected || n.id === hover || n.id === focus?.id;
+      if (!must && !(view.s > 1.1 || n.importance > 0 || n.degree >= 2 || neighbours?.has(n.id))) continue;
+      // In graph units: label width scales with the font, which is counter-scaled by zoom.
+      const w = n.name.length * font * 0.56;
+      const box = { x1: (n.x ?? 0) - w / 2, y1: (n.y ?? 0) + n.r + 2, x2: (n.x ?? 0) + w / 2, y2: (n.y ?? 0) + n.r + 4 + font };
+      if (!must && placed.some((p) => box.x1 < p.x2 && box.x2 > p.x1 && box.y1 < p.y2 && box.y2 > p.y1)) continue;
+      placed.push(box);
+      out.add(n.id);
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sim, view.s, selected, hover, focus?.id, neighbours, frameKey(sim)]);
+  const showLabel = (n: N) => labelled.has(n.id);
 
   return (
     <div className="flex h-full min-h-0 flex-col md:flex-row">
       <div className="relative min-h-[20rem] min-w-0 flex-1">
-        {sim.nodes.length === 0 ? (
+        {!mounted ? (
+          <div className="absolute inset-0 bg-bg-subtle" aria-hidden />
+        ) : sim.nodes.length === 0 ? (
           <div className="flex h-full items-center justify-center p-6">
             <EmptyState icon={<Waypoints />} title={groups.length ? "Nothing to show with these filters" : "No relationships yet"}>
               {groups.length ? "Turn more groups back on." : "Open a character or faction and add ties under Relationships. They will appear here as a web."}

@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { GitBranch, Plus, Sparkles, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge, EmptyState, PageHeader } from "@/components/ui/display";
-import { Dialog, DialogContent, DialogFooter } from "@/components/ui/overlays";
+import { ConfirmDialog, Dialog, DialogContent, DialogFooter } from "@/components/ui/overlays";
 import { Field, Input, NativeSelect, Textarea } from "@/components/ui/input";
 import { Segmented, Slider } from "@/components/ui/primitives";
 import { EntityPicker, type EntityOption } from "@/components/entity/entity-picker";
@@ -123,17 +123,20 @@ export function ConsequencesView({ campaignId, rows, now }: { campaignId: string
                     <option value="resolved">Resolved</option>
                     <option value="discarded">Discarded</option>
                   </NativeSelect>
-                  <button
-                    onClick={async () => {
+                  <ConfirmDialog
+                    trigger={
+                      <button className="rounded p-1 text-faint hover-reveal hover:text-ember" aria-label={`Delete ${r.title}`}>
+                        <Trash2 className="size-4" />
+                      </button>
+                    }
+                    title="Delete this consequence?"
+                    description={r.title}
+                    onConfirm={async () => {
                       const res = await deleteConsequenceAction(w.worldId, r.id);
-                      if (!res.ok) toast.error(res.error);
+                      if (!res.ok) return void toast.error(res.error);
                       router.refresh();
                     }}
-                    className="rounded p-1 text-faint opacity-0 hover:text-ember group-hover:opacity-100"
-                    aria-label="Delete"
-                  >
-                    <Trash2 className="size-4" />
-                  </button>
+                  />
                 </div>
               </li>
             );

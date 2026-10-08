@@ -314,17 +314,21 @@ function ProfileDialog({ profile, tracks, onClose }: { profile: Profile | null; 
         </div>
         <DialogFooter className="justify-between">
           {profile ? (
-            <Button
-              variant="danger-ghost"
-              onClick={async () => {
+            <ConfirmDialog
+              trigger={
+                <Button variant="danger-ghost">
+                  <Trash2 /> Delete
+                </Button>
+              }
+              title={`Delete the "${profile.name}" profile?`}
+              description="Its tracks stay in your library."
+              onConfirm={async () => {
                 const res = await deleteAudioProfileAction(w.worldId, profile.id);
                 if (!res.ok) return void toast.error(res.error);
                 onClose();
                 router.refresh();
               }}
-            >
-              <Trash2 /> Delete
-            </Button>
+            />
           ) : (
             <span />
           )}

@@ -14,7 +14,7 @@ import { getPlayerKnownEntities } from "./knowledge";
 import { listRelationshipsFor } from "./relationships";
 import { listTimeline } from "./timeline";
 import { getCustomTypes } from "./entities";
-import { fieldToText, getEntityType } from "@/lib/entity-types";
+import { customFieldsOf, fieldToText, getEntityType } from "@/lib/entity-types";
 import { toPlayerMarkdown } from "@/lib/mentions";
 
 const OPEN_VIS = ["public", "discovered", "partially_known"] as const;
@@ -107,7 +107,8 @@ export async function playerEntity(db: DB, worldId: string, campaign: Campaign |
   const fields = def.fields
     .filter((f) => f.section !== "dm" && !/secret/i.test(f.key))
     .map((f) => ({ label: f.label, text: fieldToText(f, (e.fields as Record<string, unknown>)[f.key]) }))
-    .filter((f) => f.text);
+    .filter((f) => f.text)
+    .concat(customFieldsOf(e.fields as Record<string, unknown>).filter((c) => !c.dmOnly).map((c) => ({ label: c.label, text: c.value })));
   const rels = (await listRelationshipsFor(db, worldId, e.id, campaign?.id ?? null)).filter((r) => (OPEN_VIS as readonly string[]).includes(r.visibility) && known.has(r.other.id) && r.canonStatus === "canon");
   // Location chain, but only the places players know about.
   const chain: { id: string; name: string }[] = [];

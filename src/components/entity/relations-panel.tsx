@@ -4,15 +4,17 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowLeftRight, Plus, Trash2, Brain, Eye } from "lucide-react";
+import { ArrowLeftRight, Plus, Trash2, Brain, Eye, EyeOff, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge, EmptyState } from "@/components/ui/display";
 import { Dialog, DialogContent, DialogFooter, ConfirmDialog } from "@/components/ui/overlays";
 import { Field, Input, NativeSelect, Textarea } from "@/components/ui/input";
 import { Segmented, Slider, Switch } from "@/components/ui/primitives";
 import { RELATIONSHIP_TYPES, normalizeRelationshipType } from "@/lib/relationship-types";
-import { createRelationshipAction, deleteRelationshipAction } from "@/server/actions/entities";
-import { createFactAction, deleteFactAction } from "@/server/actions/play";
+import { createRelationshipAction, deleteRelationshipAction, updateRelationshipAction } from "@/server/actions/entities";
+import { createFactAction, deleteFactAction, updateFactAction } from "@/server/actions/play";
+import { OptionalWorldDate, VisibilitySelect, type Visibility } from "@/components/common/visibility-select";
+import { formatDate } from "@/lib/calendar";
 import { useWorld } from "@/components/shell/world-context";
 import { EntityPicker, type EntityOption } from "./entity-picker";
 import { TypeIcon } from "./type-icon";
@@ -23,6 +25,7 @@ export function RelationshipsPanel({ entity, relationships, derived }: { entity:
   const w = useWorld();
   const router = useRouter();
   const [open, setOpen] = React.useState(false);
+  const [editing, setEditing] = React.useState<RelationshipView | null>(null);
   const [removing, setRemoving] = React.useState<RelationshipView | null>(null);
   const grouped = React.useMemo(() => {
     const m = new Map<string, RelationshipView[]>();
@@ -75,10 +78,25 @@ export function RelationshipsPanel({ entity, relationships, derived }: { entity:
                     {r.other.status === "dead" && <Badge tone="ember">dead</Badge>}
                     {r.campaignId && <Badge tone="brass">this campaign</Badge>}
                     {r.strength && <span className="text-xs text-faint" title="Strength">{"●".repeat(r.strength)}</span>}
-                    {r.description && <span className="min-w-0 text-sm text-muted">— {r.description}</span>}
-                    <button onClick={() => setRemoving(r)} className="ml-auto shrink-0 rounded p-1 text-faint opacity-0 hover:bg-ember-soft hover:text-ember group-hover:opacity-100 focus:opacity-100" aria-label={`Remove relationship with ${r.other.name}`}>
-                      <Trash2 className="size-3.5" />
-                    </button>
+                    {(r.visibility === "dm_only" || r.visibility === "secret") && <EyeOff className="mt-1 size-3 shrink-0 text-faint" aria-label="Players don't know" />}
+                    <span className="min-w-0 text-sm text-muted">
+                      {r.description && <>— {r.description}</>}
+                      {(r.startAt !== null || r.endAt !== null) && (
+                        <span className="ml-1 text-xs text-faint">
+                          {r.startAt !== null && `since ${formatDate(w.calendar, r.startAt)}`}
+                          {r.startAt !== null && r.endAt !== null && ", "}
+                          {r.endAt !== null && `ended ${formatDate(w.calendar, r.endAt)}`}
+                        </span>
+                      )}
+                    </span>
+                    <span className="ml-auto flex shrink-0 gap-0.5">
+                      <button onClick={() => setEditing(r)} className="rounded p-1 text-faint hover-reveal hover:bg-surface-2 hover:text-fg" aria-label={`Edit relationship with ${r.other.name}`}>
+                        <Pencil className="size-3.5" />
+                      </button>
+                      <button onClick={() => setRemoving(r)} className="rounded p-1 text-faint hover-reveal hover:bg-ember-soft hover:text-ember" aria-label={`Remove relationship with ${r.other.name}`}>
+                        <Trash2 className="size-3.5" />
+                      </button>
+                    </span>
                   </div>
                 ))}
               </dd>
@@ -87,6 +105,7 @@ export function RelationshipsPanel({ entity, relationships, derived }: { entity:
         </dl>
       )}
       <AddRelationshipDialog open={open} onOpenChange={setOpen} entity={entity} onDone={() => router.refresh()} />
+      <AddRelationshipDialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)} entity={entity} existing={editing} onDone={() => router.refresh()} />
       <ConfirmDialog
         open={!!removing}
         onOpenChange={(o) => !o && setRemoving(null)}
@@ -104,7 +123,20 @@ export function RelationshipsPanel({ entity, relationships, derived }: { entity:
   );
 }
 
-export function AddRelationshipDialog({ open, onOpenChange, entity, onDone }: { open: boolean; onOpenChange: (o: boolean) => void; entity: { id: string; name: string; type: string }; onDone: () => void }) {
+export function AddRelationshipDialog({
+  open,
+  onOpenChange,
+  entity,
+  onDone,
+  existing,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  entity: { id: string; name: string; type: string };
+  onDone: () => void;
+  /** Edit this relationship instead of creating one. */
+  existing?: RelationshipView | null;
+}) {
   const w = useWorld();
   const [direction, setDirection] = React.useState<"out" | "in">("out");
   const [type, setType] = React.useState("member_of");
@@ -112,41 +144,65 @@ export function AddRelationshipDialog({ open, onOpenChange, entity, onDone }: { 
   const [other, setOther] = React.useState<EntityOption | null>(null);
   const [description, setDescription] = React.useState("");
   const [strength, setStrength] = React.useState(3);
+  const [visibility, setVisibility] = React.useState<Visibility>("secret");
+  const [startAt, setStartAt] = React.useState<number | null>(null);
+  const [endAt, setEndAt] = React.useState<number | null>(null);
   const [campaignOnly, setCampaignOnly] = React.useState(false);
   const [pending, setPending] = React.useState(false);
   const def = RELATIONSHIP_TYPES.find((t) => t.key === type);
   const label = type === "__custom" ? custom || "…" : direction === "out" ? def?.label : def?.inverse;
 
   React.useEffect(() => {
-    if (open) {
+    if (!open) return;
+    if (existing) {
+      const known = RELATIONSHIP_TYPES.some((t) => t.key === existing.type);
+      setDirection(existing.direction === "outgoing" ? "out" : "in");
+      setType(known ? existing.type : "__custom");
+      setCustom(known ? "" : existing.type.replace(/_/g, " "));
+      setOther({ id: existing.other.id, name: existing.other.name, type: existing.other.type });
+      setDescription(existing.description);
+      setStrength(existing.strength ?? 3);
+      setVisibility(existing.visibility as Visibility);
+      setStartAt(existing.startAt);
+      setEndAt(existing.endAt);
+    } else {
       setOther(null);
       setDescription("");
+      setVisibility("secret");
+      setStartAt(null);
+      setEndAt(null);
     }
-  }, [open]);
+  }, [open, existing]);
 
   async function submit() {
     if (!other) return toast.error("Choose who or what it connects to.");
     const t = type === "__custom" ? normalizeRelationshipType(custom) : type;
     if (!t) return toast.error("Name the relationship.");
+    if (startAt !== null && endAt !== null && endAt < startAt) return toast.error("It can't end before it starts.");
     setPending(true);
-    const res = await createRelationshipAction(w.worldId, {
-      sourceId: direction === "out" ? entity.id : other.id,
-      targetId: direction === "out" ? other.id : entity.id,
-      type: t,
-      description,
-      strength,
-      campaignId: campaignOnly ? (w.activeCampaign?.id ?? null) : null,
-    });
+    const res = existing
+      ? await updateRelationshipAction(w.worldId, existing.id, { type: t, description, strength, visibility, startAt, endAt })
+      : await createRelationshipAction(w.worldId, {
+          sourceId: direction === "out" ? entity.id : other.id,
+          targetId: direction === "out" ? other.id : entity.id,
+          type: t,
+          description,
+          strength,
+          visibility,
+          startAt,
+          endAt,
+          campaignId: campaignOnly ? (w.activeCampaign?.id ?? null) : null,
+        });
     setPending(false);
     if (!res.ok) return toast.error(res.error);
-    toast.success("Relationship added");
+    toast.success(existing ? "Relationship updated" : "Relationship added");
     onOpenChange(false);
     onDone();
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent title="Add relationship" description="Relationships are directional; symmetric ones (allies, enemies, siblings) read the same both ways." size="md">
+      <DialogContent title={existing ? "Edit relationship" : "Add relationship"} description="Relationships are directional; symmetric ones (allies, enemies, siblings) read the same both ways." size="md">
         <div className="flex flex-col gap-4">
           <div className="rounded-lg border border-line bg-surface-2 px-3 py-2.5 text-md">
             <span className="font-medium">{direction === "out" ? entity.name : other?.name ?? "…"}</span> <span className="text-accent">{label}</span>{" "}
@@ -163,7 +219,7 @@ export function AddRelationshipDialog({ open, onOpenChange, entity, onDone }: { 
                 ))}
                 <option value="__custom">Custom…</option>
               </NativeSelect>
-              {!def?.symmetric && (
+              {!def?.symmetric && !existing && (
                 <Button type="button" variant="secondary" size="icon" onClick={() => setDirection((d) => (d === "out" ? "in" : "out"))} aria-label="Swap direction" title="Swap direction">
                   <ArrowLeftRight />
                 </Button>
@@ -175,16 +231,27 @@ export function AddRelationshipDialog({ open, onOpenChange, entity, onDone }: { 
               <Input id="rel-custom" value={custom} onChange={(e) => setCustom(e.target.value)} />
             </Field>
           )}
-          <Field label="Connects to">
-            <EntityPicker value={other} onChange={setOther} excludeIds={[entity.id]} placeholder="Search your world…" />
-          </Field>
+          {!existing && (
+            <Field label="Connects to">
+              <EntityPicker value={other} onChange={setOther} excludeIds={[entity.id]} placeholder="Search your world…" />
+            </Field>
+          )}
           <Field label="Description" htmlFor="rel-desc">
             <Textarea id="rel-desc" value={description} onChange={(e) => setDescription(e.target.value)} className="min-h-14" placeholder="Why, how, since when…" />
           </Field>
-          <Field label={`Strength: ${strength}/5`}>
-            <Slider value={[strength]} min={1} max={5} step={1} onValueChange={([v]) => setStrength(v ?? 3)} />
-          </Field>
-          {w.activeCampaign && (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label={`Strength: ${strength}/5`}>
+              <Slider value={[strength]} min={1} max={5} step={1} onValueChange={([v]) => setStrength(v ?? 3)} className="mt-2" />
+            </Field>
+            <Field label="Who knows about it" htmlFor="rel-vis">
+              <VisibilitySelect id="rel-vis" value={visibility} onChange={setVisibility} />
+            </Field>
+          </div>
+          <div className="grid gap-4 rounded-md border border-line px-3 py-2.5 sm:grid-cols-2">
+            <OptionalWorldDate label="Started on a date" value={startAt} onChange={setStartAt} />
+            <OptionalWorldDate label="Has ended" value={endAt} onChange={setEndAt} />
+          </div>
+          {w.activeCampaign && !existing && (
             <label className="flex items-center justify-between gap-3 rounded-md border border-line px-3 py-2">
               <span className="text-sm">Only in {w.activeCampaign.name}</span>
               <Switch checked={campaignOnly} onCheckedChange={setCampaignOnly} />
@@ -196,7 +263,7 @@ export function AddRelationshipDialog({ open, onOpenChange, entity, onDone }: { 
             Cancel
           </Button>
           <Button variant="primary" onClick={submit} loading={pending}>
-            Add relationship
+            {existing ? "Save relationship" : "Add relationship"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -217,6 +284,8 @@ interface FactRow {
   holderId: string | null;
   subjectId: string | null;
   campaignId: string | null;
+  visibility: string;
+  learnedAt: number | null;
   otherName?: string | null;
   otherType?: string | null;
 }
@@ -232,11 +301,8 @@ export function KnowledgePanel({ entity, held, about, canHold }: { entity: { id:
   const w = useWorld();
   const router = useRouter();
   const [open, setOpen] = React.useState<"held" | "about" | null>(null);
-  const remove = async (id: string) => {
-    const res = await deleteFactAction(w.worldId, id);
-    if (!res.ok) toast.error(res.error);
-    else router.refresh();
-  };
+  const [editing, setEditing] = React.useState<{ mode: "held" | "about"; fact: FactRow } | null>(null);
+  const [removing, setRemoving] = React.useState<FactRow | null>(null);
   return (
     <div className="flex flex-col gap-6">
       {canHold && (
@@ -252,7 +318,7 @@ export function KnowledgePanel({ entity, held, about, canHold }: { entity: { id:
               <Plus /> Add
             </Button>
           </div>
-          <FactList facts={held} onRemove={remove} showOther="subject" />
+          <FactList facts={held} onRemove={setRemoving} onEdit={(fact) => setEditing({ mode: "held", fact })} showOther="subject" />
         </section>
       )}
       <section>
@@ -267,14 +333,28 @@ export function KnowledgePanel({ entity, held, about, canHold }: { entity: { id:
             <Plus /> Add
           </Button>
         </div>
-        <FactList facts={about} onRemove={remove} showOther="holder" />
+        <FactList facts={about} onRemove={setRemoving} onEdit={(fact) => setEditing({ mode: "about", fact })} showOther="holder" />
       </section>
       <AddFactDialog mode={open} entity={entity} onClose={() => setOpen(null)} onDone={() => router.refresh()} />
+      <AddFactDialog mode={editing?.mode ?? null} existing={editing?.fact} entity={entity} onClose={() => setEditing(null)} onDone={() => router.refresh()} />
+      <ConfirmDialog
+        open={!!removing}
+        onOpenChange={(o) => !o && setRemoving(null)}
+        title="Remove this piece of knowledge?"
+        description={removing?.statement}
+        confirmLabel="Remove"
+        onConfirm={async () => {
+          if (!removing) return;
+          const res = await deleteFactAction(w.worldId, removing.id);
+          if (!res.ok) toast.error(res.error);
+          else router.refresh();
+        }}
+      />
     </div>
   );
 }
 
-function FactList({ facts, onRemove, showOther }: { facts: FactRow[]; onRemove: (id: string) => void; showOther: "holder" | "subject" }) {
+function FactList({ facts, onRemove, onEdit, showOther }: { facts: FactRow[]; onRemove: (f: FactRow) => void; onEdit: (f: FactRow) => void; showOther: "holder" | "subject" }) {
   const w = useWorld();
   if (!facts.length) return <p className="rounded-md border border-dashed border-line px-3 py-3 text-sm text-faint">Nothing recorded.</p>;
   return (
@@ -300,19 +380,26 @@ function FactList({ facts, onRemove, showOther }: { facts: FactRow[]; onRemove: 
               ) : null}
               <span>confidence {f.confidence}%</span>
               {f.source && <span>source: {f.source}</span>}
+              {f.learnedAt !== null && <span>learned {formatDate(w.calendar, f.learnedAt)}</span>}
+              {f.visibility !== "dm_only" && f.visibility !== "secret" && <Badge tone="accent">players know</Badge>}
               {f.campaignId && <Badge tone="brass">this campaign</Badge>}
             </p>
           </div>
-          <button onClick={() => onRemove(f.id)} className="shrink-0 rounded p-1 text-faint opacity-0 hover:bg-ember-soft hover:text-ember group-hover:opacity-100 focus:opacity-100" aria-label="Remove">
-            <Trash2 className="size-3.5" />
-          </button>
+          <span className="flex shrink-0 gap-0.5">
+            <button onClick={() => onEdit(f)} className="rounded p-1 text-faint hover-reveal hover:bg-surface-2 hover:text-fg" aria-label="Edit">
+              <Pencil className="size-3.5" />
+            </button>
+            <button onClick={() => onRemove(f)} className="rounded p-1 text-faint hover-reveal hover:bg-ember-soft hover:text-ember" aria-label="Remove">
+              <Trash2 className="size-3.5" />
+            </button>
+          </span>
         </li>
       ))}
     </ul>
   );
 }
 
-function AddFactDialog({ mode, entity, onClose, onDone }: { mode: "held" | "about" | null; entity: { id: string; name: string; type: string }; onClose: () => void; onDone: () => void }) {
+function AddFactDialog({ mode, entity, onClose, onDone, existing }: { mode: "held" | "about" | null; entity: { id: string; name: string; type: string }; onClose: () => void; onDone: () => void; existing?: FactRow }) {
   const w = useWorld();
   const [statement, setStatement] = React.useState("");
   const [truth, setTruth] = React.useState<"true" | "false" | "partial" | "unknown">("true");
@@ -320,31 +407,50 @@ function AddFactDialog({ mode, entity, onClose, onDone }: { mode: "held" | "abou
   const [other, setOther] = React.useState<EntityOption | null>(null);
   const [isTruth, setIsTruth] = React.useState(true);
   const [source, setSource] = React.useState("");
+  const [visibility, setVisibility] = React.useState<Visibility>("dm_only");
+  const [learnedAt, setLearnedAt] = React.useState<number | null>(null);
   const [campaignOnly, setCampaignOnly] = React.useState(false);
   const [pending, setPending] = React.useState(false);
   React.useEffect(() => {
-    if (mode) {
+    if (!mode) return;
+    if (existing) {
+      setStatement(existing.statement);
+      setTruth(existing.truthStatus as typeof truth);
+      setConfidence(existing.confidence);
+      setSource(existing.source);
+      setVisibility(existing.visibility as Visibility);
+      setLearnedAt(existing.learnedAt);
+      setIsTruth(mode === "about" && !existing.holderId);
+      const otherId = mode === "held" ? existing.subjectId : existing.holderId;
+      setOther(otherId && existing.otherName ? { id: otherId, name: existing.otherName, type: existing.otherType ?? "npc" } : null);
+    } else {
       setStatement("");
       setOther(null);
       setTruth("true");
+      setConfidence(80);
       setIsTruth(mode === "about");
       setSource("");
+      setVisibility("dm_only");
+      setLearnedAt(mode === "held" ? (w.activeCampaign?.currentAt ?? w.worldNow) : null);
     }
-  }, [mode]);
+  }, [mode, existing, w.activeCampaign?.currentAt, w.worldNow]);
   if (!mode) return null;
   const submit = async () => {
     if (!statement.trim()) return toast.error("Write the statement.");
     setPending(true);
-    const res = await createFactAction(w.worldId, {
+    const values = {
       holderId: mode === "held" ? entity.id : isTruth ? null : (other?.id ?? null),
       subjectId: mode === "about" ? entity.id : (other?.id ?? null),
       statement,
       truthStatus: truth,
       confidence,
       source,
-      campaignId: campaignOnly ? (w.activeCampaign?.id ?? null) : null,
-      learnedAt: mode === "held" ? (w.activeCampaign?.currentAt ?? w.worldNow) : null,
-    });
+      visibility,
+      learnedAt,
+    };
+    const res = existing
+      ? await updateFactAction(w.worldId, existing.id, values)
+      : await createFactAction(w.worldId, { ...values, campaignId: campaignOnly ? (w.activeCampaign?.id ?? null) : null });
     setPending(false);
     if (!res.ok) return toast.error(res.error);
     onClose();
@@ -352,7 +458,7 @@ function AddFactDialog({ mode, entity, onClose, onDone }: { mode: "held" | "abou
   };
   return (
     <Dialog open={!!mode} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent title={mode === "held" ? `Something ${entity.name} knows` : `Something known about ${entity.name}`} size="md">
+      <DialogContent title={existing ? "Edit knowledge" : mode === "held" ? `Something ${entity.name} knows` : `Something known about ${entity.name}`} size="md">
         <div className="flex flex-col gap-4">
           {mode === "about" && (
             <Segmented
@@ -390,10 +496,16 @@ function AddFactDialog({ mode, entity, onClose, onDone }: { mode: "held" | "abou
               <Slider value={[confidence]} min={0} max={100} step={5} onValueChange={([v]) => setConfidence(v ?? 80)} className="mt-2" />
             </Field>
           </div>
-          <Field label="Source (optional)" htmlFor="fact-source">
-            <Input id="fact-source" value={source} onChange={(e) => setSource(e.target.value)} placeholder="Overheard at the docks" />
-          </Field>
-          {w.activeCampaign && (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Source (optional)" htmlFor="fact-source">
+              <Input id="fact-source" value={source} onChange={(e) => setSource(e.target.value)} placeholder="Overheard at the docks" />
+            </Field>
+            <Field label="Do the players know it?" htmlFor="fact-vis">
+              <VisibilitySelect id="fact-vis" value={visibility} onChange={setVisibility} />
+            </Field>
+          </div>
+          {(mode === "held" || !isTruth) && <OptionalWorldDate label="Date they learned it" value={learnedAt} onChange={setLearnedAt} />}
+          {w.activeCampaign && !existing && (
             <label className={cn("flex items-center justify-between gap-3 rounded-md border border-line px-3 py-2")}>
               <span className="text-sm">Only in {w.activeCampaign.name}</span>
               <Switch checked={campaignOnly} onCheckedChange={setCampaignOnly} />

@@ -39,16 +39,20 @@ export function MetricsPanel({ entityId, metrics }: { entityId: string; metrics:
               <button onClick={() => save(m.label, m.value + 5, m.min, m.max)} className="rounded p-0.5 text-faint hover:bg-surface-2 hover:text-fg" aria-label={`Increase ${m.label}`}>
                 <Plus className="size-3" />
               </button>
-              <button
-                onClick={async () => {
+              <ConfirmDialog
+                trigger={
+                  <button className="rounded p-0.5 text-faint hover-reveal hover:text-ember" aria-label={`Remove ${m.label}`}>
+                    <Trash2 className="size-3" />
+                  </button>
+                }
+                title={`Stop tracking ${m.label}?`}
+                confirmLabel="Remove"
+                onConfirm={async () => {
                   const res = await deleteMetricAction(w.worldId, m.id);
-                  if (res.ok) router.refresh();
+                  if (!res.ok) return void toast.error(res.error);
+                  router.refresh();
                 }}
-                className="rounded p-0.5 text-faint opacity-0 hover:text-ember group-hover:opacity-100"
-                aria-label={`Remove ${m.label}`}
-              >
-                <Trash2 className="size-3" />
-              </button>
+              />
             </span>
           </div>
           <Meter value={m.value} min={m.min} max={m.max} tone="brass" className="mt-1" label={m.label} />

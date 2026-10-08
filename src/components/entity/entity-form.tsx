@@ -10,11 +10,12 @@ import { Segmented, Slider, Switch } from "@/components/ui/primitives";
 import { Panel, SectionTitle } from "@/components/ui/display";
 import { MarkdownEditor } from "@/components/common/markdown-editor";
 import { WorldDateInput } from "@/components/common/world-date-input";
+import { OptionalWorldDate } from "@/components/common/visibility-select";
 import { EntityPicker, type EntityOption } from "./entity-picker";
 import { TypeGlyph } from "./type-icon";
 import { useWorld } from "@/components/shell/world-context";
 import { createEntityAction, updateEntityAction } from "@/server/actions/entities";
-import { getEntityType, PLACE_TYPES, type FieldDef } from "@/lib/entity-types";
+import { CUSTOM_FIELDS_KEY, getEntityType, PLACE_TYPES, type CustomField, type FieldDef } from "@/lib/entity-types";
 import type { EntityInput } from "@/lib/validation";
 import type { RefMap } from "@/components/common/markdown";
 import { cn, lowerLabel } from "@/lib/utils";
@@ -58,10 +59,11 @@ export interface EntityFormValue {
     nextMilestoneAt: number | null;
     possibleOutcomes: string;
     triggers: string;
+    startAt: number | null;
     stages: { title: string; description: string }[];
   };
   mystery?: { question: string; truth: string; status: string };
-  rumour?: { claim: string; truth: string; accuracy: number; distortion: string; originText: string };
+  rumour?: { claim: string; truth: string; accuracy: number; distortion: string; originText: string; startedAt: number | null; expiresAt: number | null };
   event?: { startAt: number; endAt: number | null; precision: "year" | "month" | "day" | "minute"; kind: string };
 }
 
@@ -89,6 +91,10 @@ export function EntityForm({ initial, refs, mode }: { initial: EntityFormValue; 
   async function save() {
     if (!v.name.trim()) {
       setErrors({ name: "Name is required" });
+      return;
+    }
+    if (((v.fields[CUSTOM_FIELDS_KEY] as CustomField[] | undefined) ?? []).some((r) => r.value.trim() && !r.label.trim())) {
+      toast.error("Give each of your own fields a label.");
       return;
     }
     setPending(true);
@@ -257,6 +263,10 @@ export function EntityForm({ initial, refs, mode }: { initial: EntityFormValue; 
                 <Input id="ef-ro" value={v.rumour.originText} onChange={(e) => set("rumour", { ...v.rumour!, originText: e.target.value })} />
               </Field>
             </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <OptionalWorldDate label="Started circulating" value={v.rumour.startedAt} onChange={(n) => set("rumour", { ...v.rumour!, startedAt: n })} />
+              <OptionalWorldDate label="Fades out" value={v.rumour.expiresAt} onChange={(n) => set("rumour", { ...v.rumour!, expiresAt: n })} />
+            </div>
           </Panel>
         )}
 
@@ -285,6 +295,8 @@ export function EntityForm({ initial, refs, mode }: { initial: EntityFormValue; 
           <SectionTitle>Article</SectionTitle>
           <MarkdownEditor value={v.body} onChange={(b) => set("body", b)} refs={refs} minRows={14} ariaLabel="Article" />
         </section>
+
+        <CustomFieldsEditor value={(v.fields[CUSTOM_FIELDS_KEY] as CustomField[] | undefined) ?? []} onChange={(rows) => setField(CUSTOM_FIELDS_KEY, rows)} />
 
         <section className="rounded-lg border border-dashed border-ember/40 p-4">
           <SectionTitle>
@@ -528,6 +540,35 @@ function QuestFields({ value, onChange }: { value: NonNullable<EntityFormValue["
   );
 }
 
+function CustomFieldsEditor({ value, onChange }: { value: CustomField[]; onChange: (rows: CustomField[]) => void }) {
+  const set = (i: number, patch: Partial<CustomField>) => onChange(value.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  return (
+    <section>
+      <SectionTitle>Your own fields</SectionTitle>
+      <p className="-mt-1 mb-2 text-xs text-faint">Anything this entry needs that its type doesn&apos;t have: a bounty, a favourite drink, a debt owed.</p>
+      {value.length > 0 && (
+        <ul className="mb-2 flex flex-col gap-1.5">
+          {value.map((r, i) => (
+            <li key={i} className="grid grid-cols-[minmax(0,10rem)_minmax(0,1fr)_auto_auto] items-center gap-1.5">
+              <Input value={r.label} onChange={(e) => set(i, { label: e.target.value })} placeholder="Label" className="h-8 text-sm" aria-label={`Field ${i + 1} label`} maxLength={60} />
+              <Input value={r.value} onChange={(e) => set(i, { value: e.target.value })} placeholder="Value" className="h-8 text-sm" aria-label={`Field ${i + 1} value`} />
+              <label className="flex items-center gap-1.5 whitespace-nowrap px-1 text-xs text-muted" title="Never shown to players">
+                <Switch checked={r.dmOnly} onCheckedChange={(c) => set(i, { dmOnly: c })} aria-label={`Field ${i + 1} DM only`} /> DM only
+              </label>
+              <Button type="button" variant="ghost" size="icon-sm" onClick={() => onChange(value.filter((_, j) => j !== i))} aria-label={`Remove field ${i + 1}`}>
+                <X />
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <Button type="button" variant="ghost" size="sm" onClick={() => onChange([...value, { label: "", value: "", dmOnly: false }])}>
+        <Plus /> Add a field
+      </Button>
+    </section>
+  );
+}
+
 function ThreadFields({ value, onChange }: { value: NonNullable<EntityFormValue["thread"]>; onChange: (v: NonNullable<EntityFormValue["thread"]>) => void }) {
   const w = useWorld();
   const set = <K extends keyof typeof value>(k: K, v: (typeof value)[K]) => onChange({ ...value, [k]: v });
@@ -580,6 +621,7 @@ function ThreadFields({ value, onChange }: { value: NonNullable<EntityFormValue[
           <Textarea id="t-trig" value={value.triggers} onChange={(e) => set("triggers", e.target.value)} className="min-h-14" />
         </Field>
         <div className="flex flex-col gap-4">
+          <OptionalWorldDate label="Started on a date" value={value.startAt} onChange={(n) => set("startAt", n)} />
           <Field label="Next milestone" htmlFor="t-next">
             <Input id="t-next" value={value.nextMilestone} onChange={(e) => set("nextMilestone", e.target.value)} />
           </Field>

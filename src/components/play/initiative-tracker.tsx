@@ -148,7 +148,7 @@ export function InitiativeTracker({
                   <Skull className="size-3.5" />
                 </button>
                 {!compact && (
-                  <button onClick={() => act(removeCombatantAction(w.worldId, encounter.id, c.id))} className="rounded p-1 text-faint opacity-0 hover:text-ember group-hover:opacity-100" aria-label="Remove">
+                  <button onClick={() => act(removeCombatantAction(w.worldId, encounter.id, c.id))} className="rounded p-1 text-faint hover-reveal hover:text-ember" aria-label="Remove">
                     <Trash2 className="size-3.5" />
                   </button>
                 )}

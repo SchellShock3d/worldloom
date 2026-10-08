@@ -4,16 +4,16 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Check, CircleDashed, EyeOff, Plus, Trash2, X } from "lucide-react";
+import { Check, CircleDashed, EyeOff, Pencil, Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge, Meter } from "@/components/ui/display";
 import { Checkbox, Select, Slider, Switch } from "@/components/ui/primitives";
-import { Dialog, DialogContent, DialogFooter } from "@/components/ui/overlays";
+import { ConfirmDialog, Dialog, DialogContent, DialogFooter } from "@/components/ui/overlays";
 import { Field, Textarea } from "@/components/ui/input";
 import { useWorld } from "@/components/shell/world-context";
 import { ThreadLine } from "@/components/living/thread-line";
 import { EntityPicker, type EntityOption } from "./entity-picker";
-import { createClueAction, deleteClueAction, moveThreadAction, setClueDiscoveredAction, setQuestStatusAction, toggleObjectiveAction } from "@/server/actions/play";
+import { createClueAction, deleteClueAction, moveThreadAction, setClueDiscoveredAction, setQuestStatusAction, toggleObjectiveAction, updateClueAction } from "@/server/actions/play";
 import { formatDate, describeDuration } from "@/lib/calendar";
 import type { Clue, QuestStatus, WorldThread } from "@/server/db/schema";
 import { cn } from "@/lib/utils";
@@ -173,6 +173,15 @@ export function ThreadPanel({ threadId, thread, stages }: { threadId: string; th
         </ol>
       )}
       <dl className="mt-4 grid gap-y-1.5 text-sm">
+        {thread.startAt !== null && (
+          <div className="flex gap-2">
+            <dt className="w-32 shrink-0 text-faint">Began</dt>
+            <dd>
+              {formatDate(w.calendar, thread.startAt)}
+              {thread.startAt <= now && <span className="text-faint"> · {describeDuration(w.calendar, now - thread.startAt)} ago</span>}
+            </dd>
+          </div>
+        )}
         {thread.nextMilestone && (
           <div className="flex gap-2">
             <dt className="w-32 shrink-0 text-faint">Next milestone</dt>
@@ -209,6 +218,8 @@ export function CluesPanel({ mysteryId, questId, clues, question, truth, knowers
   const w = useWorld();
   const router = useRouter();
   const [adding, setAdding] = React.useState(false);
+  const [editing, setEditing] = React.useState<Clue | null>(null);
+  const [removing, setRemoving] = React.useState<Clue | null>(null);
   const real = clues.filter((c) => !c.isRedHerring);
   const found = real.filter((c) => c.discovered).length;
   const toggle = async (c: Clue) => {
@@ -216,11 +227,7 @@ export function CluesPanel({ mysteryId, questId, clues, question, truth, knowers
     if (!res.ok) toast.error(res.error);
     else router.refresh();
   };
-  const remove = async (c: Clue) => {
-    const res = await deleteClueAction(w.worldId, c.id);
-    if (!res.ok) toast.error(res.error);
-    else router.refresh();
-  };
+
   return (
     <section className="rounded-lg border border-line bg-surface p-4">
       {question && (
@@ -266,46 +273,79 @@ export function CluesPanel({ mysteryId, questId, clues, question, truth, knowers
                   {knowers.filter((k) => k.clueId === c.id).length > 0 && <span>known to {knowers.filter((k) => k.clueId === c.id).map((k) => k.name).join(", ")}</span>}
                 </p>
               </div>
-              <button onClick={() => remove(c)} className="rounded p-1 text-faint opacity-0 hover:bg-ember-soft hover:text-ember group-hover:opacity-100 focus:opacity-100" aria-label="Delete clue">
-                <Trash2 className="size-3.5" />
-              </button>
+              <span className="flex shrink-0 gap-0.5">
+                <button onClick={() => setEditing(c)} className="rounded p-1 text-faint hover-reveal hover:bg-surface-3 hover:text-fg" aria-label="Edit clue">
+                  <Pencil className="size-3.5" />
+                </button>
+                <button onClick={() => setRemoving(c)} className="rounded p-1 text-faint hover-reveal hover:bg-ember-soft hover:text-ember" aria-label="Delete clue">
+                  <Trash2 className="size-3.5" />
+                </button>
+              </span>
             </li>
           ))}
         </ul>
       )}
       <AddClueDialog open={adding} onOpenChange={setAdding} mysteryId={mysteryId} questId={questId} onDone={() => router.refresh()} />
+      <AddClueDialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)} existing={editing} mysteryId={mysteryId} questId={questId} onDone={() => router.refresh()} />
+      <ConfirmDialog
+        open={!!removing}
+        onOpenChange={(o) => !o && setRemoving(null)}
+        title="Delete this clue?"
+        description={removing?.description}
+        onConfirm={async () => {
+          if (!removing) return;
+          const res = await deleteClueAction(w.worldId, removing.id);
+          if (!res.ok) toast.error(res.error);
+          else router.refresh();
+        }}
+      />
     </section>
   );
 }
 
-function AddClueDialog({ open, onOpenChange, mysteryId, questId, onDone }: { open: boolean; onOpenChange: (o: boolean) => void; mysteryId?: string; questId?: string; onDone: () => void }) {
+function AddClueDialog({
+  open,
+  onOpenChange,
+  mysteryId,
+  questId,
+  onDone,
+  existing,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  mysteryId?: string;
+  questId?: string;
+  onDone: () => void;
+  existing?: Clue | null;
+}) {
   const w = useWorld();
   const [description, setDescription] = React.useState("");
   const [location, setLocation] = React.useState<EntityOption | null>(null);
   const [source, setSource] = React.useState<EntityOption | null>(null);
+  const [sourceText, setSourceText] = React.useState("");
   const [herring, setHerring] = React.useState(false);
   const [pending, setPending] = React.useState(false);
   React.useEffect(() => {
-    if (open) {
-      setDescription("");
-      setLocation(null);
-      setSource(null);
-      setHerring(false);
-    }
-  }, [open]);
+    if (!open) return;
+    setDescription(existing?.description ?? "");
+    setLocation(null);
+    setSource(null);
+    setSourceText(existing?.sourceText ?? "");
+    setHerring(existing?.isRedHerring ?? false);
+  }, [open, existing]);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent title="Add a clue" size="md">
+      <DialogContent title={existing ? "Edit clue" : "Add a clue"} size="md">
         <div className="flex flex-col gap-4">
           <Field label="The clue" htmlFor="clue-desc">
             <Textarea id="clue-desc" value={description} onChange={(e) => setDescription(e.target.value)} className="min-h-16" autoFocus />
           </Field>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Where it's found">
-              <EntityPicker value={location} onChange={setLocation} placeholder="Optional" />
+            <Field label="Where it's found" hint={existing?.locationId && !location ? "Leave empty to keep the current place." : undefined}>
+              <EntityPicker value={location} onChange={setLocation} placeholder={existing?.locationId ? "Unchanged" : "Optional"} />
             </Field>
-            <Field label="Who has it">
-              <EntityPicker value={source} onChange={setSource} placeholder="Optional" />
+            <Field label="Who has it" hint={existing && sourceText && !source ? `Currently: ${sourceText}` : undefined}>
+              <EntityPicker value={source} onChange={(o) => (setSource(o), setSourceText(o?.name ?? ""))} placeholder={existing?.sourceText ? "Unchanged" : "Optional"} />
             </Field>
           </div>
           <label className="flex items-center justify-between gap-3 rounded-md border border-line px-3 py-2">
@@ -323,22 +363,29 @@ function AddClueDialog({ open, onOpenChange, mysteryId, questId, onDone }: { ope
             onClick={async () => {
               if (!description.trim()) return toast.error("Describe the clue.");
               setPending(true);
-              const res = await createClueAction(w.worldId, w.activeCampaign?.id ?? null, {
-                mysteryId: mysteryId ?? null,
-                questId: questId ?? null,
-                description,
-                locationId: location?.id ?? null,
-                sourceEntityId: source?.id ?? null,
-                sourceText: source?.name ?? "",
-                isRedHerring: herring,
-              });
+              const res = existing
+                ? await updateClueAction(w.worldId, existing.id, {
+                    description,
+                    isRedHerring: herring,
+                    ...(location && { locationId: location.id }),
+                    ...(source && { sourceEntityId: source.id, sourceText: source.name }),
+                  })
+                : await createClueAction(w.worldId, w.activeCampaign?.id ?? null, {
+                    mysteryId: mysteryId ?? null,
+                    questId: questId ?? null,
+                    description,
+                    locationId: location?.id ?? null,
+                    sourceEntityId: source?.id ?? null,
+                    sourceText: source?.name ?? "",
+                    isRedHerring: herring,
+                  });
               setPending(false);
               if (!res.ok) return toast.error(res.error);
               onOpenChange(false);
               onDone();
             }}
           >
-            Add clue
+            {existing ? "Save clue" : "Add clue"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -346,8 +393,25 @@ function AddClueDialog({ open, onOpenChange, mysteryId, questId, onDone }: { ope
   );
 }
 
-export function RumourPanel({ claim, truth, accuracy, distortion, origin }: { claim: string; truth: string; accuracy: number; distortion: string; origin: { id: string; name: string } | null }) {
+export function RumourPanel({
+  claim,
+  truth,
+  accuracy,
+  distortion,
+  origin,
+  startedAt = null,
+  expiresAt = null,
+}: {
+  claim: string;
+  truth: string;
+  accuracy: number;
+  distortion: string;
+  origin: { id: string; name: string } | null;
+  startedAt?: number | null;
+  expiresAt?: number | null;
+}) {
   const w = useWorld();
+  const now = w.activeCampaign?.currentAt ?? w.worldNow;
   return (
     <section className="rounded-lg border border-line bg-surface p-4">
       <p className="font-serif text-xl italic leading-snug">“{claim}”</p>
@@ -362,6 +426,12 @@ export function RumourPanel({ claim, truth, accuracy, distortion, origin }: { cl
         </div>
       )}
       {distortion && <p className="mt-2 text-sm text-muted">Distortion: {distortion}</p>}
+      {(startedAt !== null || expiresAt !== null) && (
+        <p className="mt-2 text-sm text-muted">
+          {startedAt !== null && <>Circulating since {formatDate(w.calendar, startedAt)}. </>}
+          {expiresAt !== null && (expiresAt > now ? <>Fades in {describeDuration(w.calendar, expiresAt - now)}.</> : <span className="text-faint">Faded {formatDate(w.calendar, expiresAt)}.</span>)}
+        </p>
+      )}
       {origin && (
         <p className="mt-2 text-sm text-muted">
           Started from{" "}

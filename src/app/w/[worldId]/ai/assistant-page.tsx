@@ -2,11 +2,12 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { MessageSquarePlus, MessageSquareQuote, Sparkles } from "lucide-react";
+import { MessageSquarePlus, MessageSquareQuote, MessagesSquare, Sparkles } from "lucide-react";
 import { useWorld } from "@/components/shell/world-context";
 import { ChatComposer, ChatThread, useAssistant, type ChatMessage } from "@/components/ai/assistant-drawer";
 import { EntityPicker, type EntityOption } from "@/components/entity/entity-picker";
 import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent } from "@/components/ui/overlays";
 import { cn, timeAgo } from "@/lib/utils";
 
 const PROMPTS = [
@@ -44,10 +45,9 @@ export function AssistantPage({
     }
   }, [initialPrompt, send, messages.length]);
   const base = `/w/${w.worldId}/ai`;
-
-  return (
-    <div className="flex h-full">
-      <aside className="hidden w-64 shrink-0 flex-col border-r border-line md:flex">
+  const [listOpen, setListOpen] = React.useState(false);
+  const sidebar = (
+    <>
         <div className="flex flex-col gap-2 p-3">
           <Button asChild variant="secondary" size="sm">
             <Link href={base}>
@@ -71,10 +71,25 @@ export function AssistantPage({
           <EntityPicker value={rp} onChange={(v) => { setRp(v); if (v) window.location.href = `${base}?roleplay=${v.id}`; }} types={["npc"]} placeholder="Choose an NPC" allowCreate={false} size="sm" />
           <p className="mt-1.5 text-2xs text-faint">The AI only knows what that character knows.</p>
         </div>
+    </>
+  );
+
+  return (
+    <div className="flex h-full">
+      <aside className="hidden w-64 shrink-0 flex-col border-r border-line md:flex">
+        {sidebar}
       </aside>
+      <Sheet open={listOpen} onOpenChange={setListOpen}>
+        <SheetContent side="left" width="sm" title="Conversations" className="md:hidden">
+          <div className="flex h-full flex-col">{sidebar}</div>
+        </SheetContent>
+      </Sheet>
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="min-h-0 flex-1 overflow-y-auto">
           <div className="mx-auto max-w-3xl px-4 py-6">
+            <Button variant="ghost" size="sm" className="-ml-2 mb-3 md:hidden" onClick={() => setListOpen(true)}>
+              <MessagesSquare /> Conversations and roleplay
+            </Button>
             {roleplay && (
               <div className="mb-5 rounded-lg border border-brass/30 bg-brass-soft px-4 py-3">
                 <p className="font-serif text-lg font-semibold">Speaking as {roleplay.name}</p>

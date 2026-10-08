@@ -39,7 +39,7 @@ export default async function MapPage({ params, searchParams }: { params: Promis
       .leftJoin(entities, eq(entities.id, mapRegions.entityId))
       .where(eq(mapRegions.mapId, mapId))
       .orderBy(asc(mapRegions.name)),
-    db.select({ id: mapLayers.id, name: mapLayers.name }).from(mapLayers).where(eq(mapLayers.mapId, mapId)).orderBy(asc(mapLayers.position)),
+    db.select({ id: mapLayers.id, name: mapLayers.name, visibleByDefault: mapLayers.visibleByDefault }).from(mapLayers).where(eq(mapLayers.mapId, mapId)).orderBy(asc(mapLayers.position)),
     map.entityId ? db.select({ id: entities.id, name: entities.name, type: entities.type }).from(entities).where(eq(entities.id, map.entityId)) : Promise.resolve([]),
   ]);
 
@@ -108,7 +108,7 @@ export default async function MapPage({ params, searchParams }: { params: Promis
         <div className="flex flex-wrap items-center gap-2">
           {children.length > 0 && (
             <div className="flex flex-wrap items-center gap-1.5 text-sm">
-              <span className="text-faint">Inside:</span>
+              <span className="text-faint">Maps inside this one:</span>
               {children.map((c) => (
                 <Link key={c.id} href={`/w/${worldId}/maps/${c.id}`} className="rounded-md border border-line px-2 py-1 text-muted hover:border-line-strong hover:text-fg">
                   {c.name}

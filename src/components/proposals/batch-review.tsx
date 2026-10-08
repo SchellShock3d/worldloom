@@ -245,7 +245,7 @@ function ProposalCard({
             </ul>
           )}
           {(item.rationale || (d.bullets?.length ?? 0) > 3 || (d.detail?.length ?? 0) > 140) && (
-            <button onClick={() => setOpen((o) => !o)} className="mt-1 inline-flex items-center gap-1 text-xs text-faint hover:text-fg">
+            <button onClick={() => setOpen((o) => !o)} className="mr-3 mt-1 inline-flex items-center gap-1 text-xs text-faint hover:text-fg">
               {open ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
               {open ? "Less" : "Why, and more detail"}
             </button>
@@ -257,7 +257,7 @@ function ProposalCard({
             </p>
           )}
           {created && item.status === "applied" && (
-            <Link href={`/w/${w.worldId}/e/${created.id}`} className="mt-1 inline-block text-sm text-accent hover:underline">
+            <Link href={`/w/${w.worldId}/e/${created.id}`} className="mt-1 inline-block text-xs font-medium text-accent hover:underline">
               Open
             </Link>
           )}

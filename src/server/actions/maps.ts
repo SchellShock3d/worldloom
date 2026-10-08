@@ -181,15 +181,16 @@ export async function deleteRegionAction(worldId: string, mapId: string, regionI
   });
 }
 
-export async function saveLayerAction(worldId: string, mapId: string, name: string, layerId?: string) {
+export async function saveLayerAction(worldId: string, mapId: string, name: string, layerId?: string, opts: { visibleByDefault?: boolean } = {}) {
   return run(async () => {
     await authorizeWorld(worldId, "editor");
     const { db } = await mapInWorld(worldId, mapId);
     const n = z.string().trim().min(1).max(60).parse(name);
-    if (layerId) await db.update(mapLayers).set({ name: n }).where(and(eq(mapLayers.id, layerId), eq(mapLayers.mapId, mapId)));
+    const visibleByDefault = z.boolean().optional().parse(opts.visibleByDefault);
+    if (layerId) await db.update(mapLayers).set({ name: n, ...(visibleByDefault !== undefined && { visibleByDefault }) }).where(and(eq(mapLayers.id, layerId), eq(mapLayers.mapId, mapId)));
     else {
       const existing = await db.select().from(mapLayers).where(eq(mapLayers.mapId, mapId));
-      await db.insert(mapLayers).values({ mapId, name: n, position: existing.length });
+      await db.insert(mapLayers).values({ mapId, name: n, position: existing.length, visibleByDefault: visibleByDefault ?? true });
     }
     refresh(worldId);
     return null;

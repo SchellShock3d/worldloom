@@ -56,10 +56,11 @@ export async function formValueFor(db: DB, worldId: string, e: Entity): Promise<
       nextMilestoneAt: ext.thread.nextMilestoneAt,
       possibleOutcomes: ext.thread.possibleOutcomes,
       triggers: ext.thread.triggers,
+      startAt: ext.thread.startAt,
       stages: ext.stages.map((s) => ({ title: s.title, description: s.description })),
     };
   if (ext?.kind === "mystery" && ext.mystery) v.mystery = { question: ext.mystery.question, truth: ext.mystery.truth, status: ext.mystery.status };
-  if (ext?.kind === "rumour" && ext.rumour) v.rumour = { claim: ext.rumour.claim, truth: ext.rumour.truth, accuracy: ext.rumour.accuracy, distortion: ext.rumour.distortion, originText: ext.rumour.originText };
+  if (ext?.kind === "rumour" && ext.rumour) v.rumour = { claim: ext.rumour.claim, truth: ext.rumour.truth, accuracy: ext.rumour.accuracy, distortion: ext.rumour.distortion, originText: ext.rumour.originText, startedAt: ext.rumour.startedAt, expiresAt: ext.rumour.expiresAt };
   if (ext?.kind === "event" && ext.event) v.event = { startAt: ext.event.startAt, endAt: ext.event.endAt, precision: ext.event.precision, kind: ext.event.kind };
   return v;
 }
@@ -90,9 +91,9 @@ export async function blankFormValue(db: DB, type: string, opts: { now: number; 
     campaignId: def.campaignScoped || type === "quest" || type === "mystery" ? opts.campaignId : null,
   };
   if (def.extension === "quest") v.quest = { status: "available", priority: 1, giver: null, thread: null, rewards: "", prerequisites: "", consequences: "", playerKnowledge: "", objectives: [] };
-  if (def.extension === "thread") v.thread = { status: "active", progress: 0, urgency: 3, momentum: 10, goals: "", nextMilestone: "", nextMilestoneAt: null, possibleOutcomes: "", triggers: "", stages: [] };
+  if (def.extension === "thread") v.thread = { status: "active", progress: 0, urgency: 3, momentum: 10, goals: "", nextMilestone: "", nextMilestoneAt: null, possibleOutcomes: "", triggers: "", startAt: opts.now, stages: [] };
   if (def.extension === "mystery") v.mystery = { question: "", truth: "", status: "open" };
-  if (def.extension === "rumour") v.rumour = { claim: "", truth: "", accuracy: 50, distortion: "", originText: "" };
+  if (def.extension === "rumour") v.rumour = { claim: "", truth: "", accuracy: 50, distortion: "", originText: "", startedAt: opts.now, expiresAt: null };
   if (def.extension === "event") v.event = { startAt: opts.now, endAt: null, precision: "day", kind: opts.campaignId ? "campaign" : "historical" };
   return v;
 }

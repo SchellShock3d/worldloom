@@ -1,4 +1,4 @@
-import type { EntityTypeDef, FieldDef } from "@/lib/entity-types";
+import { customFieldsOf, type EntityTypeDef, type FieldDef } from "@/lib/entity-types";
 import { abilityMod } from "@/lib/game-systems/dnd5e";
 import { cn } from "@/lib/utils";
 
@@ -7,15 +7,31 @@ function hasValue(v: unknown) {
 }
 
 /** Short fields as a definition list (sidebar). */
+function shortFieldsOf(def: EntityTypeDef, fields: Record<string, unknown>, includeDm: boolean) {
+  return def.fields.filter((f) => ["text", "number", "select", "tags", "boolean"].includes(f.kind) && f.section !== "stats" && (includeDm || f.section !== "dm") && hasValue(fields[f.key]));
+}
+
+/** Whether ShortFields would render anything. */
+export function hasShortFields(def: EntityTypeDef, fields: Record<string, unknown>, includeDm = true) {
+  return shortFieldsOf(def, fields, includeDm).length > 0 || customFieldsOf(fields).some((c) => includeDm || !c.dmOnly);
+}
+
 export function ShortFields({ def, fields, includeDm = true }: { def: EntityTypeDef; fields: Record<string, unknown>; includeDm?: boolean }) {
-  const short = def.fields.filter((f) => ["text", "number", "select", "tags", "boolean"].includes(f.kind) && f.section !== "stats" && (includeDm || f.section !== "dm") && hasValue(fields[f.key]));
-  if (!short.length) return null;
+  const short = shortFieldsOf(def, fields, includeDm);
+  const custom = customFieldsOf(fields).filter((c) => includeDm || !c.dmOnly);
+  if (!short.length && !custom.length) return null;
   return (
     <dl className="flex flex-col">
       {short.map((f) => (
         <div key={f.key} className="grid grid-cols-[7.5rem_1fr] gap-3 py-1.5 text-sm">
           <dt className="text-faint">{f.label}</dt>
           <dd className={cn("min-w-0", f.section === "dm" && "text-ember")}>{renderShort(f, fields[f.key])}</dd>
+        </div>
+      ))}
+      {custom.map((c, i) => (
+        <div key={`c-${i}`} className="grid grid-cols-[7.5rem_1fr] gap-3 py-1.5 text-sm">
+          <dt className="text-faint">{c.label}</dt>
+          <dd className={cn("min-w-0 whitespace-pre-line", c.dmOnly && "text-ember")}>{c.value}</dd>
         </div>
       ))}
     </dl>

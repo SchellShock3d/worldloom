@@ -88,7 +88,7 @@ export function WorldShell({ worlds, pendingProposals, user, children, ...value 
       <div className="flex h-dvh overflow-hidden">
         <Sidebar worlds={worlds} pendingProposals={pendingProposals} mobileOpen={mobileNav} onMobileClose={() => setMobileNav(false)} />
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="flex h-12 shrink-0 items-center gap-2 border-b border-line bg-bg px-3 sm:px-4">
+          <header className="flex h-12 shrink-0 items-center gap-1.5 border-b border-line bg-bg px-2 sm:gap-2 sm:px-4">
             <Button variant="ghost" size="icon-sm" className="lg:hidden" onClick={() => setMobileNav(true)} aria-label="Open navigation">
               <Menu />
             </Button>
@@ -96,7 +96,7 @@ export function WorldShell({ worlds, pendingProposals, user, children, ...value 
               <DropdownMenuTrigger asChild>
                 <button className="flex h-8 min-w-0 items-center gap-2 rounded-md px-2 text-sm hover:bg-surface-2" aria-label="Switch campaign">
                   {c ? <Compass className="size-4 shrink-0 text-brass" /> : <Globe className="size-4 shrink-0 text-faint" />}
-                  <span className="max-w-[12rem] truncate font-medium">{c ? c.name : "World view"}</span>
+                  <span className="hidden max-w-[7rem] truncate font-medium min-[440px]:inline sm:max-w-[12rem]">{c ? c.name : "World view"}</span>
                   <ChevronDown className="size-3.5 shrink-0 text-faint" />
                 </button>
               </DropdownMenuTrigger>
@@ -126,6 +126,10 @@ export function WorldShell({ worlds, pendingProposals, user, children, ...value 
                   {!c && <Check className="!text-accent" />}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => router.push(`${base}/campaigns`)}>
+                  <Compass />
+                  All campaigns
+                </DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => router.push(`${base}/campaigns/new`)}>
                   <Plus />
                   New campaign
@@ -151,7 +155,7 @@ export function WorldShell({ worlds, pendingProposals, user, children, ...value 
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="secondary" size="md" aria-label="Create">
+                <Button variant="secondary" size="md" aria-label="Create" className="shrink-0 max-sm:size-8 max-sm:px-0">
                   <Plus /> <span className="hidden sm:inline">Create</span>
                 </Button>
               </DropdownMenuTrigger>
@@ -179,8 +183,8 @@ export function WorldShell({ worlds, pendingProposals, user, children, ...value 
 
             {c && (
               <Tooltip content="Run session mode">
-                <Button asChild variant="primary" size="md">
-                  <Link href={`${base}/campaigns/${c.id}/run`}>
+                <Button asChild variant="primary" size="md" className="shrink-0 max-sm:size-8 max-sm:px-0">
+                  <Link href={`${base}/campaigns/${c.id}/run`} aria-label="Run session">
                     <Clapperboard /> <span className="hidden xl:inline">Run session</span>
                   </Link>
                 </Button>
@@ -188,14 +192,14 @@ export function WorldShell({ worlds, pendingProposals, user, children, ...value 
             )}
 
             <Tooltip content="AI copilot" shortcut="⌘J">
-              <Button variant="arcane" size="icon" onClick={() => setAssistant((a) => ({ open: !a.open }))} aria-label="Open AI copilot">
+              <Button variant="arcane" size="icon" className="shrink-0" onClick={() => setAssistant((a) => ({ open: !a.open }))} aria-label="Open AI copilot">
                 <Sparkles />
               </Button>
             </Tooltip>
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex size-8 items-center justify-center rounded-full bg-surface-3 text-xs font-semibold text-fg hover:ring-2 hover:ring-line-strong" aria-label="Account">
+                <button className="flex size-8 shrink-0 items-center justify-center rounded-full bg-surface-3 text-xs font-semibold text-fg hover:ring-2 hover:ring-line-strong" aria-label="Account">
                   {user.name.slice(0, 1).toUpperCase()}
                 </button>
               </DropdownMenuTrigger>

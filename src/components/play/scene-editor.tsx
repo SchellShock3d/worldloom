@@ -11,6 +11,7 @@ import { EntityMultiPicker, EntityPicker, type EntityOption } from "@/components
 import { useWorld } from "@/components/shell/world-context";
 import { deleteSceneAction, saveSceneAction } from "@/server/actions/sessions";
 import { PLACE_TYPES } from "@/lib/entity-types";
+import { OptionalWorldDate } from "@/components/common/visibility-select";
 
 export interface SceneDraft {
   id?: string;
@@ -27,10 +28,12 @@ export interface SceneDraft {
   encounterId: string | null;
   audioProfileId: string | null;
   sessionId: string | null;
+  /** In-world time the scene takes place. */
+  atTime: number | null;
 }
 
-export function emptyScene(sessionId: string | null): SceneDraft {
-  return { name: "", description: "", location: null, present: [], threads: [], quest: null, mood: "", lighting: "", weather: "", ambience: "", encounterId: null, audioProfileId: null, sessionId };
+export function emptyScene(sessionId: string | null, atTime: number | null = null): SceneDraft {
+  return { name: "", description: "", location: null, present: [], threads: [], quest: null, mood: "", lighting: "", weather: "", ambience: "", encounterId: null, audioProfileId: null, sessionId, atTime };
 }
 
 export function SceneEditor({
@@ -77,7 +80,7 @@ export function SceneEditor({
         audioProfileId: s.audioProfileId,
         presentIds: s.present.map((p) => p.id),
         threadIds: s.threads.map((t) => t.id),
-        atTime: w.activeCampaign?.currentAt ?? null,
+        atTime: s.atTime,
       },
       s.id,
     );
@@ -105,6 +108,7 @@ export function SceneEditor({
             <Field label="Location">
               <EntityPicker value={s.location} onChange={(v) => set("location", v)} types={PLACE_TYPES} placeholder="Where?" />
             </Field>
+            <OptionalWorldDate label="Happens at a set time" value={s.atTime} onChange={(v) => set("atTime", v)} withTime />
             <div className="grid grid-cols-2 gap-3">
               <Field label="Mood" htmlFor="sc-mood">
                 <Input id="sc-mood" value={s.mood} onChange={(e) => set("mood", e.target.value)} placeholder="Tense" />

@@ -3,13 +3,15 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Dices, Save, Sparkles, NotebookPen, Zap } from "lucide-react";
+import { Copy, Dices, Save, Sparkles, NotebookPen, Swords, UserPlus, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Markdown } from "@/components/common/markdown";
 import { useWorld } from "@/components/shell/world-context";
 import { needSomethingAction } from "@/server/actions/ai";
-import { rollTableAction } from "@/server/actions/tools";
+import { rollTableAction, saveEncounterAction } from "@/server/actions/tools";
+import { saveNoteAction } from "@/server/actions/play";
+import { toPlayerMarkdown } from "@/lib/mentions";
 import { createEntityAction } from "@/server/actions/entities";
 import type { EmergencyResult } from "@/server/ai/tasks/dm-tools";
 import { cn } from "@/lib/utils";
@@ -41,6 +43,31 @@ export function NeedSomethingNow({ onLog, columns = 5 }: { onLog?: (text: string
     setBusy(null);
     if (!res.ok) return toast.error(res.error);
     setResult(res.data);
+  };
+  const copy = async () => {
+    if (!result) return;
+    try {
+      await navigator.clipboard.writeText(`${result.title}\n${result.text}`);
+      toast.success("Copied");
+    } catch {
+      toast.error("Couldn't reach the clipboard.");
+    }
+  };
+  const saveEncounter = async () => {
+    if (!result) return;
+    setSaving(true);
+    const res = await saveEncounterAction(w.worldId, { name: result.summary.slice(0, 120) || "Improvised encounter", description: result.text, campaignId: w.activeCampaign?.id ?? null, locationId: result.locationId });
+    setSaving(false);
+    if (!res.ok) return void toast.error(res.error);
+    toast.success("Encounter saved", { action: { label: "Open", onClick: () => router.push(`/w/${w.worldId}/encounters/${res.data.id}`) } });
+  };
+  const saveNote = async () => {
+    if (!result) return;
+    setSaving(true);
+    const res = await saveNoteAction(w.worldId, w.activeCampaign?.id ?? null, { title: result.title, body: result.text });
+    setSaving(false);
+    if (!res.ok) return void toast.error(res.error);
+    toast.success(`Saved to ${w.activeCampaign?.name ?? "the campaign"}'s notes`);
   };
   const save = async () => {
     if (!result?.entityType) return;
@@ -75,20 +102,56 @@ export function NeedSomethingNow({ onLog, columns = 5 }: { onLog?: (text: string
             <p className="font-serif text-lg font-semibold">{result.title}</p>
             {result.provider !== "offline" && <Sparkles className="size-3.5 text-arcane" />}
           </div>
-          <Markdown variant="sans" className="text-sm">
-            {result.text}
-          </Markdown>
+          {result.kind === "name" ? (
+            <ul className="flex flex-wrap gap-1.5">
+              {result.text
+                .split("\n")
+                .map((l) => l.replace(/^[-*]\s*/, "").trim())
+                .filter(Boolean)
+                .map((n) => (
+                  <li key={n}>
+                    <button
+                      onClick={() => w.openQuickCreate({ type: "npc", defaults: { name: n }, onCreated: () => router.refresh() })}
+                      className="inline-flex items-center gap-1 rounded-full border border-line px-2.5 py-1 text-sm hover:border-accent hover:text-accent"
+                      title={`Create an NPC called ${n}`}
+                    >
+                      <UserPlus className="size-3.5" /> {n}
+                    </button>
+                  </li>
+                ))}
+            </ul>
+          ) : (
+            <Markdown variant="sans" className="text-sm">
+              {result.text}
+            </Markdown>
+          )}
           <div className="mt-3 flex flex-wrap gap-2">
             {result.entityType && (
               <Button size="xs" variant="primary" onClick={save} loading={saving}>
                 <Save /> Save to world
               </Button>
             )}
-            {onLog && (
-              <Button size="xs" variant="secondary" onClick={() => onLog(`${result.title}: ${result.text.split("\n")[0]}`)}>
-                <NotebookPen /> Add to notes
+            {result.kind === "encounter" && (
+              <Button size="xs" variant="primary" onClick={saveEncounter} loading={saving}>
+                <Swords /> Save as encounter
               </Button>
             )}
+            {onLog ? (
+              <Button size="xs" variant="secondary" onClick={() => onLog(`${result.title}: ${toPlayerMarkdown(result.text).split("\n")[0]}`)}>
+                <NotebookPen /> Add to session notes
+              </Button>
+            ) : (
+              !result.entityType &&
+              result.kind !== "name" &&
+              w.activeCampaign && (
+                <Button size="xs" variant="secondary" onClick={saveNote} loading={saving}>
+                  <NotebookPen /> Save as a note
+                </Button>
+              )
+            )}
+            <Button size="xs" variant="ghost" onClick={copy}>
+              <Copy /> Copy
+            </Button>
             <Button size="xs" variant="ghost" onClick={() => go(result.kind)} disabled={!!busy}>
               Another
             </Button>

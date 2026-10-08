@@ -16,6 +16,7 @@ import {
   MapPin,
   Maximize,
   Minus,
+  MoreHorizontal,
   MousePointer2,
   Orbit,
   Pentagon,
@@ -32,11 +33,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { Field, Input, NativeSelect, Textarea } from "@/components/ui/input";
 import { Segmented, Switch } from "@/components/ui/primitives";
-import { Tooltip } from "@/components/ui/overlays";
+import { ConfirmDialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Tooltip } from "@/components/ui/overlays";
 import { EntityPicker, type EntityOption } from "@/components/entity/entity-picker";
 import { TypeIcon } from "@/components/entity/type-icon";
 import { useWorld } from "@/components/shell/world-context";
-import { deleteMarkerAction, deleteRegionAction, moveMarkerAction, saveLayerAction, saveMarkerAction, saveRegionAction } from "@/server/actions/maps";
+import { deleteLayerAction, deleteMarkerAction, deleteRegionAction, moveMarkerAction, saveLayerAction, saveMarkerAction, saveRegionAction } from "@/server/actions/maps";
 import { cn } from "@/lib/utils";
 
 export const MARKER_CATEGORIES: Record<string, { label: string; icon: LucideIcon; color: string }> = {
@@ -91,7 +92,7 @@ export function MapViewer({
   map: { id: string; name: string; imageUrl: string | null; width: number; height: number };
   markers: MarkerView[];
   regions: RegionView[];
-  layers: { id: string; name: string }[];
+  layers: { id: string; name: string; visibleByDefault?: boolean }[];
   maps: { id: string; name: string }[];
   focusMarkerId?: string | null;
   /** Viewers and players can browse but not edit. */
@@ -106,7 +107,7 @@ export function MapViewer({
   const [sel, setSel] = React.useState<Selection>(null);
   const [draftPts, setDraftPts] = React.useState<[number, number][]>([]);
   const [hiddenCats, setHiddenCats] = React.useState<Set<string>>(new Set());
-  const [hiddenLayers, setHiddenLayers] = React.useState<Set<string>>(new Set());
+  const [hiddenLayers, setHiddenLayers] = React.useState<Set<string>>(() => new Set(layers.filter((l) => l.visibleByDefault === false).map((l) => l.id)));
   const [playerView, setPlayerView] = React.useState(false);
   const [newLayer, setNewLayer] = React.useState("");
   const drag = React.useRef<{ kind: "pan" | "marker"; id?: string; startX: number; startY: number; vx: number; vy: number; moved: boolean } | null>(null);
@@ -379,10 +380,22 @@ export function MapViewer({
                 <Layers className="size-4" /> Layers
               </h3>
               {layers.map((l) => (
-                <label key={l.id} className="flex items-center justify-between gap-2 py-1 text-sm">
-                  {l.name}
-                  <Switch checked={!hiddenLayers.has(l.id)} onCheckedChange={(c) => setHiddenLayers((s) => { const n = new Set(s); if (c) n.delete(l.id); else n.add(l.id); return n; })} />
-                </label>
+                <LayerRow
+                  key={l.id}
+                  mapId={map.id}
+                  layer={l}
+                  shown={!hiddenLayers.has(l.id)}
+                  readOnly={readOnly}
+                  onToggle={(c) =>
+                    setHiddenLayers((s) => {
+                      const n = new Set(s);
+                      if (c) n.delete(l.id);
+                      else n.add(l.id);
+                      return n;
+                    })
+                  }
+                  onChanged={() => router.refresh()}
+                />
               ))}
               {!readOnly && <form
                 className="mt-1 flex gap-1.5"
@@ -594,17 +607,20 @@ function MarkerPanel({
       </Field>
       <div className="flex gap-2">
         {id && (
-          <Button
-            variant="danger-ghost"
-            size="sm"
-            onClick={async () => {
+          <ConfirmDialog
+            trigger={
+              <Button variant="danger-ghost" size="sm" aria-label="Delete marker">
+                <Trash2 />
+              </Button>
+            }
+            title="Delete this marker?"
+            description="The entry it points to is not affected."
+            onConfirm={async () => {
               const res = await deleteMarkerAction(w.worldId, mapId, id);
-              if (!res.ok) return toast.error(res.error);
+              if (!res.ok) return void toast.error(res.error);
               onSaved();
             }}
-          >
-            <Trash2 />
-          </Button>
+          />
         )}
         <div className="flex-1" />
         <Button variant="ghost" size="sm" onClick={id ? () => setEditing(false) : onClose}>
@@ -614,6 +630,84 @@ function MarkerPanel({
           Save
         </Button>
       </div>
+    </div>
+  );
+}
+
+function LayerRow({
+  mapId,
+  layer,
+  shown,
+  readOnly,
+  onToggle,
+  onChanged,
+}: {
+  mapId: string;
+  layer: { id: string; name: string; visibleByDefault?: boolean };
+  shown: boolean;
+  readOnly: boolean;
+  onToggle: (shown: boolean) => void;
+  onChanged: () => void;
+}) {
+  const w = useWorld();
+  const [renaming, setRenaming] = React.useState(false);
+  const [name, setName] = React.useState(layer.name);
+  const [confirmDelete, setConfirmDelete] = React.useState(false);
+  const save = async (patch: { name?: string; visibleByDefault?: boolean }) => {
+    const res = await saveLayerAction(w.worldId, mapId, patch.name ?? layer.name, layer.id, { visibleByDefault: patch.visibleByDefault });
+    if (!res.ok) return void toast.error(res.error);
+    setRenaming(false);
+    onChanged();
+  };
+  if (renaming)
+    return (
+      <form
+        className="flex gap-1.5 py-1"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (name.trim()) save({ name });
+        }}
+      >
+        <Input value={name} onChange={(e) => setName(e.target.value)} className="h-7 text-sm" autoFocus aria-label="Layer name" onKeyDown={(e) => e.key === "Escape" && setRenaming(false)} />
+        <Button type="submit" size="xs" variant="secondary">
+          Save
+        </Button>
+      </form>
+    );
+  return (
+    <div className="group flex items-center justify-between gap-2 py-1 text-sm">
+      <span className="min-w-0 flex-1 truncate">
+        {layer.name}
+        {layer.visibleByDefault === false && <span className="ml-1.5 text-xs text-faint">hidden at first</span>}
+      </span>
+      {!readOnly && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="hover-reveal rounded p-0.5 text-faint hover:bg-surface-2 hover:text-fg" aria-label={`Layer options for ${layer.name}`}>
+              <MoreHorizontal className="size-4" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={() => setRenaming(true)}>Rename</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => save({ visibleByDefault: layer.visibleByDefault === false })}>{layer.visibleByDefault === false ? "Show when the map opens" : "Hide when the map opens"}</DropdownMenuItem>
+            <DropdownMenuItem danger onSelect={() => setConfirmDelete(true)}>
+              Delete layer
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+      <Switch checked={shown} onCheckedChange={onToggle} aria-label={`Show ${layer.name}`} />
+      <ConfirmDialog
+        open={confirmDelete}
+        onOpenChange={setConfirmDelete}
+        title={`Delete the "${layer.name}" layer?`}
+        description="Its markers and regions stay on the map, without a layer."
+        onConfirm={async () => {
+          const res = await deleteLayerAction(w.worldId, mapId, layer.id);
+          if (!res.ok) return void toast.error(res.error);
+          onChanged();
+        }}
+      />
     </div>
   );
 }
@@ -678,17 +772,20 @@ function RegionPanel({ mapId, draft, id, layers, onClose, onSaved, readOnly }: {
       </Field>
       <div className="flex gap-2">
         {id && (
-          <Button
-            variant="danger-ghost"
-            size="sm"
-            onClick={async () => {
+          <ConfirmDialog
+            trigger={
+              <Button variant="danger-ghost" size="sm" aria-label="Delete region">
+                <Trash2 />
+              </Button>
+            }
+            title="Delete this region?"
+            description="The entry it points to is not affected."
+            onConfirm={async () => {
               const res = await deleteRegionAction(w.worldId, mapId, id);
-              if (!res.ok) return toast.error(res.error);
+              if (!res.ok) return void toast.error(res.error);
               onSaved();
             }}
-          >
-            <Trash2 />
-          </Button>
+          />
         )}
         <div className="flex-1" />
         <Button
