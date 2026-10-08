@@ -35,8 +35,7 @@ import {
   TriangleAlert,
   UserRound,
   Waypoints,
-  type LucideIcon,
-} from "lucide-react";
+  type LucideIcon, Eye } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LogoMark } from "./logo";
 import { useWorld } from "./world-context";
@@ -144,6 +143,10 @@ export function Sidebar({ worlds, pendingProposals, mobileOpen, onMobileClose }:
               </DropdownMenuItem>
             ))}
             <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => router.push(`/play/${w.worldId}${w.activeCampaign ? `?c=${w.activeCampaign.id}` : ""}`)}>
+              <Eye />
+              Preview the player portal
+            </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => router.push("/onboarding?new=1")}>
               <Plus />
               New world

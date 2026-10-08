@@ -634,10 +634,40 @@ export function sanitizeFields(def: EntityTypeDef, input: FieldValues | null | u
         .map((s) => s.trim())
         .filter(Boolean);
     }
+    // AI drafts and imports often describe structured fields as text; accept the obvious forms.
+    if (typeof v === "string") v = coerceFieldText(f, v);
     const parsed = schemaForField(f).safeParse(v);
     if (parsed.success) out[f.key] = parsed.data;
   }
   return out;
+}
+
+/** Best-effort parse of a text value into a structured field (inventory, abilities, yes/no). */
+export function coerceFieldText(f: FieldDef, text: string): unknown {
+  const t = text.trim();
+  switch (f.kind) {
+    case "boolean":
+      if (/^(yes|true|y|1)$/i.test(t)) return true;
+      if (/^(no|false|n|0)$/i.test(t)) return false;
+      return t;
+    case "inventory":
+      return t
+        .split(/\s*(?:;|\n)\s*/)
+        .map((line) => line.replace(/^[-*•]\s*/, "").trim())
+        .filter(Boolean)
+        .slice(0, 100)
+        .map((line) => {
+          const [name, price] = line.split(/\s+[—–-]\s+|:\s+/, 2);
+          return { name: (name ?? line).slice(0, 200), price: (price ?? "").slice(0, 60), qty: "", notes: "" };
+        });
+    case "abilities": {
+      const out: Record<string, number> = {};
+      for (const m of t.matchAll(/\b(str|dex|con|int|wis|cha)[a-z]*\s*[:=]?\s*(\d{1,2})/gi)) out[m[1]!.toLowerCase()] = Number(m[2]);
+      return ["str", "dex", "con", "int", "wis", "cha"].every((k) => k in out) ? out : t;
+    }
+    default:
+      return text;
+  }
 }
 
 export function fieldToText(f: FieldDef, v: unknown): string {

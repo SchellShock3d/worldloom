@@ -171,3 +171,25 @@ describe("fuzzy search", () => {
     expect((await searchWorld(db, worldId, "Isolda")).length).toBe(0);
   });
 });
+
+describe("player portal", () => {
+  it("never exposes DM-only text, secret fields or undiscovered entries", async () => {
+    const { worldId, campaignId } = await demo();
+    const { pickPlayerCampaign, playerEntity, playerOverview } = await import("@/server/services/player-view");
+    const { campaign } = await pickPlayerCampaign(db, worldId, campaignId);
+    const overview = await playerOverview(db, worldId, campaign);
+    const all = await db.select().from(entities).where(eq(entities.worldId, worldId));
+    const dmOnly = all.filter((e) => e.visibility === "dm_only");
+    for (const e of dmOnly) expect(overview.known.has(e.id)).toBe(false);
+    const vael = all.find((e) => e.name === "Lord Vael")!;
+    const page = await playerEntity(db, worldId, campaign, vael.id);
+    const text = JSON.stringify(page);
+    expect(text).not.toMatch(/nightshade/i);
+    expect(text).not.toMatch(/funding/i);
+    const marr = all.find((e) => e.name === "Lady Marr")!;
+    expect(JSON.stringify(await playerEntity(db, worldId, campaign, marr.id))).not.toMatch(/signet ring/i);
+    // An undiscovered secret entry is not reachable at all.
+    const secret = all.find((e) => e.visibility === "secret" || e.visibility === "dm_only");
+    if (secret && !overview.known.has(secret.id)) expect(await playerEntity(db, worldId, campaign, secret.id)).toBeNull();
+  });
+});

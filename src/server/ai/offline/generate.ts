@@ -151,7 +151,7 @@ export async function offlineGenerate(db: DB, opts: GenOpts): Promise<ChangeSet>
         break;
       case "tavern": {
         const tname = `The ${rng.pick(B.TAVERN_FIRST)} ${rng.pick(B.TAVERN_SECOND)}`;
-        const menu = rng.sample(B.MENU_ITEMS, 5).map(([n, p]) => ({ key: "", value: `${n} — ${p}` }));
+        const menu = rng.sample(B.MENU_ITEMS, 5).map(([n, p]) => `${n} — ${p}`);
         cs.newEntities.push({
           ref,
           type: "tavern",
@@ -164,7 +164,8 @@ export async function offlineGenerate(db: DB, opts: GenOpts): Promise<ChangeSet>
             { key: "quality", value: rng.pick(["Poor", "Modest", "Comfortable"]) },
             { key: "ambience", value: rng.pick(B.TAVERN_AMBIENCE) },
             { key: "rooms", value: `${rng.int(2, 9)} rooms at ${rng.int(3, 8)} sp a night` },
-            { key: "patrons", value: menu.length ? "Locals, travellers, and the occasional off-duty guard" : "" },
+            { key: "menu", value: menu.join("; ") },
+            { key: "patrons", value: rng.pick(["Locals, travellers, and the occasional off-duty guard", "Dockhands and fishwives", "Caravan drivers and their guards", "Students, gamblers and a few people who'd rather not be noticed"]) },
           ],
           tags: ["tavern"],
           aliases: [],

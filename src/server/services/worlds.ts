@@ -145,7 +145,8 @@ export async function getLastSessionForUser(db: DB, userId: string) {
     .from(gameSessions)
     .innerJoin(campaigns, eq(campaigns.id, gameSessions.campaignId))
     .innerJoin(worlds, eq(worlds.id, campaigns.worldId))
-    .innerJoin(worldMembers, and(eq(worldMembers.worldId, worlds.id), eq(worldMembers.userId, userId)))
+    // Players don't run sessions; the shortcut is for DMs and co-DMs.
+    .innerJoin(worldMembers, and(eq(worldMembers.worldId, worlds.id), eq(worldMembers.userId, userId), inArray(worldMembers.role, ["owner", "editor"])))
     .orderBy(desc(gameSessions.updatedAt))
     .limit(1);
   return row ?? null;

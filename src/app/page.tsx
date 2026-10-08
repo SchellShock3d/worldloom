@@ -67,14 +67,14 @@ export default async function Home() {
         <ul className="mt-8 divide-y divide-line border-y border-line">
           {worlds.map((w) => (
             <li key={w.id}>
-              <Link href={`/w/${w.id}`} className="group grid gap-x-6 gap-y-2 py-5 sm:grid-cols-[1fr_auto]">
+              <Link href={w.role === "player" ? `/play/${w.id}` : `/w/${w.id}`} className="group grid gap-x-6 gap-y-2 py-5 sm:grid-cols-[1fr_auto]">
                 <div className="min-w-0">
                   <h2 className="font-serif text-2xl font-semibold group-hover:text-accent">{w.name}</h2>
                   <p className="mt-0.5 text-sm text-muted">
                     {[w.genre, w.tone].filter(Boolean).join(", ")}
-                    {w.role !== "owner" && ` · shared with you (${w.role})`}
+                    {w.role !== "owner" && (w.role === "player" ? " · you're a player here" : ` · shared with you (${w.role})`)}
                   </p>
-                  {w.description && <p className="mt-2 line-clamp-2 max-w-[70ch] text-base text-muted">{w.description}</p>}
+                  {w.description && w.role !== "player" && <p className="mt-2 line-clamp-2 max-w-[70ch] text-base text-muted">{w.description}</p>}
                   {w.campaigns.length > 0 && (
                     <div className="mt-3 flex flex-wrap gap-1.5">
                       {w.campaigns.slice(0, 4).map((c) => (

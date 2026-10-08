@@ -87,3 +87,16 @@ describe("relationships", () => {
     expect(await listRelationshipsFor(db, world.id, guild.id)).toHaveLength(1);
   });
 });
+
+describe("structured fields from text", () => {
+  it("parses menus, ability scores and yes/no from plain text", async () => {
+    const { getEntityType, sanitizeFields } = await import("@/lib/entity-types");
+    const tavern = sanitizeFields(getEntityType("tavern"), { menu: "Mutton stew — 4 cp; Pickled eggs — 1 cp", quality: "Modest" });
+    expect(tavern.menu).toEqual([
+      { name: "Mutton stew", price: "4 cp", qty: "", notes: "" },
+      { name: "Pickled eggs", price: "1 cp", qty: "", notes: "" },
+    ]);
+    const creature = sanitizeFields(getEntityType("creature"), { abilities: "STR 16, DEX 12, CON 14, INT 3, WIS 12, CHA 6" });
+    expect(creature.abilities).toEqual({ str: 16, dex: 12, con: 14, int: 3, wis: 12, cha: 6 });
+  });
+});

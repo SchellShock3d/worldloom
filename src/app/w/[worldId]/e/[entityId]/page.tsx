@@ -70,7 +70,12 @@ export default async function EntityPage({ params }: { params: Promise<{ worldId
       )}
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex min-w-0 items-start gap-4">
-          <TypeGlyph type={entity.type} size="lg" />
+          {entity.imageFileId ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={`/api/files/${entity.imageFileId}`} alt={`Picture of ${entity.name}`} className="size-24 shrink-0 rounded-xl border border-line object-cover sm:size-28" />
+          ) : (
+            <TypeGlyph type={entity.type} size="lg" />
+          )}
           <div className="min-w-0">
             <h1 className="font-serif text-4xl font-semibold leading-tight tracking-[-0.015em]">{entity.name}</h1>
             <div className="mt-1.5 flex flex-wrap items-center gap-2 text-sm">
