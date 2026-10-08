@@ -61,7 +61,7 @@ export async function runChangeSetTask(t: ChangeSetTaskInput): Promise<ChangeSet
     } catch (err) {
       console.error("[ai] live task failed, falling back to offline engine:", err);
       cs = await t.offline();
-      cs.summary = `The AI model couldn't be reached (${err instanceof Error ? err.message.slice(0, 120) : "error"}), so the offline engine produced these. ${cs.summary}`;
+      cs.summary = `Claude couldn't be used (${err instanceof Error ? err.message.replace(/\.$/, "") : "error"}), so the built-in engine drafted these instead. ${cs.summary}`;
       fellBack = true;
       usedProvider = "offline";
     }

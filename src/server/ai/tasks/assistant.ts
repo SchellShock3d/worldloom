@@ -70,6 +70,7 @@ export async function* assistantTurn(
     const npcCtx = await buildNpcContext(db, opts.worldId, conv.roleplayEntityId, opts.campaignId);
     yield { type: "meta", conversationId: convId, refs: [{ id: npcCtx.npc.id, name: npcCtx.npc.name, type: npcCtx.npc.type }], provider: provider.name };
     let full = "";
+    let liveFailure: string | null = null;
     if (provider.live) {
       try {
         const system = `${npcCtx.text}\n\nStay in character as ${npcCtx.npc.name}. Speak in first person with their voice and mannerisms. Only use knowledge listed above; if asked about something they wouldn't know, react as they would (guess, deflect, lie if in character, or admit ignorance). Never reveal information outside their knowledge. Keep replies conversational and short unless asked for more. The DM may step out of character by writing in [brackets]; answer those briefly out of character.`;
@@ -79,15 +80,23 @@ export async function* assistantTurn(
           yield { type: "text", delta };
         }
       } catch (err) {
-        yield { type: "error", message: err instanceof Error ? err.message : "The AI model failed" };
-        return;
+        const message = err instanceof Error ? err.message : "The AI model failed";
+        // Mid-reply failures can't be patched over; before any text, fall back to the offline notes.
+        if (full) {
+          yield { type: "error", message };
+          return;
+        }
+        liveFailure = message;
       }
-    } else {
+    }
+    if (!provider.live || liveFailure) {
       const f = npcCtx.npc.fields as Record<string, unknown>;
       const field = (...keys: string[]) => keys.map((k) => f[k]).find((v): v is string => typeof v === "string" && v.trim().length > 0)?.trim() ?? "not recorded";
       const list = (items: string[], empty: string) => (items.length ? items.slice(0, 8).map((i) => `- ${i}`).join("\n") : `- ${empty}`);
       full = [
-        `_Offline roleplay notes for ${npcCtx.npc.name}. Add an Anthropic API key to have the AI speak as them._`,
+        liveFailure
+          ? `_Claude couldn't speak as ${npcCtx.npc.name}: ${liveFailure} Here are their roleplay notes instead._`
+          : `_Offline roleplay notes for ${npcCtx.npc.name}. Add an Anthropic API key to have the AI speak as them._`,
         `- **Voice:** ${field("voice", "mannerisms")}\n- **Personality:** ${field("personality")}\n- **Wants:** ${field("motivations", "goals")}`,
         `**What they know**\n${list(npcCtx.knows, "Nothing recorded yet. Add knowledge on their page.")}`,
         npcCtx.circles.length ? `**Heard within their circles**\n${list(npcCtx.circles, "")}` : "",
@@ -103,6 +112,7 @@ export async function* assistantTurn(
   }
 
   // 3) Grounded answer.
+  let liveFailure: string | null = null;
   const ctx = await buildDmContext(db, { worldId: opts.worldId, campaignId: opts.campaignId, query: opts.message, focusIds: opts.focusEntityId ? [opts.focusEntityId] : [], budgetChars: 32000 });
   yield { type: "meta", conversationId: convId, refs: ctx.refs, provider: provider.name };
   let full = "";
@@ -130,12 +140,18 @@ ${ctx.text}${extra}`;
         yield { type: "text", delta };
       }
     } catch (err) {
-      yield { type: "error", message: err instanceof Error ? err.message : "The AI model failed" };
-      return;
+      const message = err instanceof Error ? err.message : "The AI model failed";
+      if (full) {
+        yield { type: "error", message };
+        return;
+      }
+      liveFailure = message;
     }
-  } else {
+  }
+  if (!provider.live || liveFailure) {
     const relevant = await import("../context").then((m) => m.retrieveEntities(db, opts.worldId, { query: opts.message, focusIds: opts.focusEntityId ? [opts.focusEntityId] : [], campaignId: opts.campaignId, maxEntities: 6 }));
     full = await offlineAnswer(db, opts.message, ctx.bundle, relevant);
+    if (liveFailure) full = `_Claude couldn't answer: ${liveFailure} This answer comes straight from your records._\n\n${full}`;
     // Stream in small chunks so the UI behaves the same.
     for (const chunk of full.match(/[\s\S]{1,60}/g) ?? []) yield { type: "text", delta: chunk };
   }

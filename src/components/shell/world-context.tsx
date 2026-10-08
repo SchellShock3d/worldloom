@@ -21,7 +21,8 @@ export interface WorldShellValue {
   campaigns: ShellCampaign[];
   activeCampaign: ShellCampaign | null;
   customTypes: CustomTypeLike[];
-  aiProvider: { name: string; live: boolean };
+  /** `problem`: Claude is configured but recently failed (e.g. no API credits). */
+  aiProvider: { name: string; live: boolean; problem?: string | null };
   openQuickCreate: (opts?: { type?: string; defaults?: Partial<EntityInput>; onCreated?: (e: { id: string; name: string; type: string }) => void }) => void;
   openPalette: () => void;
   openAssistant: (opts?: { prompt?: string; focusEntityId?: string }) => void;

@@ -113,7 +113,12 @@ export function AssistantPage({
                     ))}
                   </div>
                 )}
-                {(provider ?? w.aiProvider.name) === "offline" && (
+                {w.aiProvider.problem && (
+                  <p className="rounded-md border border-ember/30 bg-ember-soft px-3 py-2 text-xs text-fg">
+                    Claude is set up but isn&rsquo;t answering: {w.aiProvider.problem} Until that&rsquo;s fixed, answers come from your records and proposals from the built-in engine.
+                  </p>
+                )}
+                {(provider ?? w.aiProvider.name) === "offline" && !w.aiProvider.problem && (
                   <p className="rounded-md bg-surface-2 px-3 py-2 text-xs text-muted">
                     Offline mode: answers come straight from your records, and proposals use Worldloom&rsquo;s rule-based engine. Add <code>ANTHROPIC_API_KEY</code> to the server environment for free-form AI.
                   </p>

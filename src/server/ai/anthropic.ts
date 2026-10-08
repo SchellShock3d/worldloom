@@ -1,7 +1,14 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import type { z } from "zod";
-import type { AIProvider, AIRequest } from "./provider";
+import { describeAIError, noteAIFailure, noteAISuccess, type AIProvider, type AIRequest } from "./provider";
+
+/** Record the outcome and rethrow failures with a message a DM can act on. */
+function fail(err: unknown): never {
+  const message = describeAIError(err);
+  noteAIFailure(message);
+  throw new Error(message, { cause: err });
+}
 
 const DEFAULT_MODEL = "claude-sonnet-5-5";
 const DEFAULT_FAST_MODEL = "claude-haiku-4-5-20251001";
@@ -29,7 +36,8 @@ export class AnthropicProvider implements AIProvider {
   }
 
   async text(req: AIRequest): Promise<string> {
-    const msg = await this.client.messages.create(this.params(req));
+    const msg = await this.client.messages.create(this.params(req)).catch(fail);
+    noteAISuccess();
     return msg.content
       .filter((b): b is Anthropic.TextBlock => b.type === "text")
       .map((b) => b.text)
@@ -37,17 +45,25 @@ export class AnthropicProvider implements AIProvider {
   }
 
   async *stream(req: AIRequest): AsyncIterable<string> {
-    const stream = this.client.messages.stream(this.params(req));
-    for await (const event of stream) {
-      if (event.type === "content_block_delta" && event.delta.type === "text_delta") yield event.delta.text;
+    try {
+      const stream = this.client.messages.stream(this.params(req));
+      for await (const event of stream) {
+        if (event.type === "content_block_delta" && event.delta.type === "text_delta") yield event.delta.text;
+      }
+    } catch (err) {
+      fail(err);
     }
+    noteAISuccess();
   }
 
   async structured<T>(req: AIRequest & { schema: z.ZodType<T>; name: string }): Promise<T> {
-    const msg = await this.client.messages.parse({
-      ...this.params({ ...req, maxTokens: req.maxTokens ?? 8192 }),
-      output_config: { format: zodOutputFormat(req.schema as z.ZodType) },
-    });
+    const msg = await this.client.messages
+      .parse({
+        ...this.params({ ...req, maxTokens: req.maxTokens ?? 8192 }),
+        output_config: { format: zodOutputFormat(req.schema as z.ZodType) },
+      })
+      .catch(fail);
+    noteAISuccess();
     if (msg.parsed_output === null || msg.parsed_output === undefined) {
       throw new Error(msg.stop_reason === "max_tokens" ? "The AI response was cut off. Try a smaller request." : "The AI returned an unexpected response.");
     }

@@ -35,7 +35,7 @@ export default async function WorldLayout({ children, params }: { children: Reac
       campaigns={all.map(toShell)}
       activeCampaign={campaign ? toShell(campaign) : null}
       customTypes={customTypes}
-      aiProvider={{ name: providerInfo(ai).name, live: providerInfo(ai).live }}
+      aiProvider={{ name: providerInfo(ai).name, live: providerInfo(ai).live, problem: providerInfo(ai).problem }}
       worlds={worlds.map((w) => ({ id: w.id, name: w.name }))}
       pendingProposals={pending}
       user={{ name: user.name, email: user.email }}

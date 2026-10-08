@@ -236,6 +236,11 @@ export function AssistantDrawer({ open, onOpenChange, initialPrompt, focusEntity
                 </button>
               ))}
             </div>
+            {w.aiProvider.problem && (
+              <p className="rounded-md border border-ember/30 bg-ember-soft px-3 py-2 text-xs text-fg">
+                Claude is set up but isn&rsquo;t answering: {w.aiProvider.problem} Until that&rsquo;s fixed, answers come from your records and proposals from the built-in engine.
+              </p>
+            )}
             {!w.aiProvider.live && (
               <p className="rounded-md bg-surface-2 px-3 py-2 text-xs text-muted">
                 No AI model is connected, so the copilot answers from your records and uses Worldloom&rsquo;s rule-based engine for proposals. Add <code>ANTHROPIC_API_KEY</code> to enable free-form reasoning.

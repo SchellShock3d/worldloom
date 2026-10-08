@@ -66,8 +66,34 @@ export async function getAIProvider(): Promise<AIProvider> {
   return cached;
 }
 
+/** Turn a vendor/network error into something a DM can act on. */
+export function describeAIError(err: unknown): string {
+  const e = err as { status?: number; message?: string; name?: string; error?: { error?: { type?: string; message?: string } } };
+  const raw = `${e?.error?.error?.message ?? ""} ${e?.message ?? ""}`;
+  const type = e?.error?.error?.type ?? "";
+  if (/credit balance is too low/i.test(raw)) return "Your Anthropic account has no API credits. Add credits under Plans & Billing at console.anthropic.com.";
+  if (e?.status === 401 || type === "authentication_error") return "The Anthropic API key was rejected. Check ANTHROPIC_API_KEY.";
+  if (e?.status === 403 || type === "permission_error") return "This API key isn't allowed to use the configured model.";
+  if (e?.status === 404 || type === "not_found_error") return "The configured model isn't available to this API key. Check AI_MODEL.";
+  if (e?.status === 429 || type === "rate_limit_error") return "Anthropic's rate limit was reached. Try again in a minute.";
+  if (e?.status === 529 || type === "overloaded_error") return "Claude is overloaded right now. Try again shortly.";
+  if (e?.name === "APIConnectionError" || e?.name === "APIConnectionTimeoutError") return "The server couldn't reach the Anthropic API.";
+  const msg = (e?.message ?? "").replace(/\s+/g, " ").trim();
+  return msg ? msg.slice(0, 200) : "The AI model failed.";
+}
+
+// The most recent live-AI failure, so the UI can explain why answers are coming from the offline engine.
+let lastFailure: { message: string; at: number } | null = null;
+export function noteAIFailure(message: string) {
+  lastFailure = { message, at: Date.now() };
+}
+export function noteAISuccess() {
+  lastFailure = null;
+}
+
 export function providerInfo(p: AIProvider) {
-  return { name: p.name, live: p.live, model: p.model };
+  const problem = p.live && lastFailure && Date.now() - lastFailure.at < 15 * 60_000 ? lastFailure.message : null;
+  return { name: p.name, live: p.live, model: p.model, problem };
 }
 
 /** For tests. */
