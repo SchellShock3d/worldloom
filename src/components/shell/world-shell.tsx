@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Check, ChevronDown, Clapperboard, Compass, LogOut, Menu, Plus, Search, Sparkles, Globe } from "lucide-react";
+import { Check, ChevronDown, Clapperboard, Compass, LogOut, Menu, Plus, Search, Sparkles, Globe, SunMoon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/input";
 import {
@@ -18,7 +18,7 @@ import {
 import { ENTITY_TYPES } from "@/lib/entity-types";
 import { TypeIcon } from "@/components/entity/type-icon";
 import { QuickCreateDialog, type QuickCreateRequest } from "@/components/entity/quick-create";
-import { setActiveCampaignAction } from "@/server/actions/worlds";
+import { setActiveCampaignAction, setThemeAction } from "@/server/actions/worlds";
 import { logout } from "@/server/actions/auth";
 import { Sidebar } from "./sidebar";
 import { CommandPalette } from "./command-palette";
@@ -211,6 +211,15 @@ export function WorldShell({ worlds, pendingProposals, user, children, ...value 
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onSelect={() => router.push("/")}>
                   <Globe /> All worlds
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={async () => {
+                    const dark = !document.documentElement.classList.contains("dark");
+                    document.documentElement.classList.toggle("dark", dark);
+                    await setThemeAction(dark ? "dark" : "light");
+                  }}
+                >
+                  <SunMoon /> Switch theme
                 </DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => logout()}>
                   <LogOut /> Sign out

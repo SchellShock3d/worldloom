@@ -16,6 +16,8 @@ let campaignUrl = "";
 async function expectNoErrorPage(page: Page) {
   await expect(page.getByText("Application error", { exact: false })).toHaveCount(0);
   await expect(page.getByText("This page could not be found")).toHaveCount(0);
+  // Worldloom's own not-found and error pages.
+  await expect(page.getByRole("heading", { name: /^(Nothing here|This thread leads nowhere|Something snapped)$/ })).toHaveCount(0);
 }
 
 test("sign up, create a world and its first campaign", async ({ page }) => {
@@ -133,6 +135,9 @@ test.describe("signed in", () => {
       "/wiki",
       "/characters",
       "/locations",
+      "/culture",
+      "/rumours",
+      "/campaigns",
       "/maps",
       "/timeline",
       "/calendar",
