@@ -8,13 +8,15 @@ Built with Next.js 15, React 19, TypeScript, Drizzle ORM and PostgreSQL.
 
 ```bash
 npm install
-npm run dev            # http://localhost:3000
+npm start              # http://localhost:3000
 ```
+
+`npm start` runs Worldloom in fast mode. The first run (and the first run after you update the code) builds the app, which takes a couple of minutes; after that it starts in about a second and pages load in a fraction of a second. Use `npm run dev` only when you're changing the code: development mode recompiles each page on first visit and is many times slower.
 
 You don't need a database server. With no `DATABASE_URL`, Worldloom runs an embedded PostgreSQL (PGlite) in `./.data/pglite`, and migrations run automatically on first use.
 
 1. Open http://localhost:3000 and create an account.
-2. Choose **Start blank** or **Build with AI**, or open the demo world from the home screen ("The Shattered Crown", a fully populated example).
+2. Walk through the world creator (idea, magic and technology, the land, peoples, powers and history, where play begins), or press **Create it now, fill in later**. You can also open the demo world from the home screen ("The Shattered Crown", a fully populated example).
 3. Create a campaign, then press **Run session**.
 
 Every AI feature works without an API key through a built-in rule-based engine. For full AI (grounded answers, NPC roleplay, rich generation, deep continuity review), add an Anthropic key:
@@ -37,14 +39,16 @@ cp .env.example .env.local
 | `AI_FAST_MODEL` | `claude-haiku-4-5-20251001` | Model for "I need something now" quick generators. |
 | `AI_DEBUG_DIR` | unset | If set, every raw structured response from Claude is saved here as JSON, for prompt tuning. Leave unset in production. |
 | `UPLOAD_DIR` | `./.data/uploads` | Where uploaded maps, images and audio are stored. |
-| `INSECURE_COOKIES` | unset | Set to `true` only when serving a production build over plain HTTP (local testing). |
+| `PORT` | `3000` | Port for `npm start`. |
+| `INSECURE_COOKIES` | unset | Rarely needed: sign-in cookies already follow the connection (secure over HTTPS, plain over `http://localhost` or a LAN address). Set to `true` to force non-secure cookies behind a proxy that hides the protocol. |
 
 ## Scripts
 
 | Command | What it does |
 | --- | --- |
-| `npm run dev` | Development server on port 3000. |
-| `npm run build` / `npm start` | Production build and server. |
+| `npm start` | Fast mode: builds if the code changed since the last build, then serves on port 3000. Use this to play. |
+| `npm run dev` | Development server (Turbopack) for working on the code. |
+| `npm run build` / `npm run serve` | Build and serve separately (what `npm start` does for you). |
 | `npm run typecheck` | TypeScript, strict. |
 | `npm test` | Unit and integration tests (Vitest, in-memory Postgres, offline AI). |
 | `npm run test:e2e` | Browser tests of the critical flows (Playwright, production build, throwaway database). |
@@ -58,7 +62,9 @@ The demo world is never added to an account unless someone asks for it: from the
 ## What's in it
 
 **The world**
-- A wiki of typed entries with stable IDs: 26 built-in types (NPCs, settlements, factions, religions, items, creatures, lore and more) plus your own custom types and one-off custom fields on any entry.
+- A step-by-step world creator: genre, tone, magic (how much, where it comes from, how people feel about it), technology, the shape of the land, peoples, governments, faith, history, where play begins, and content to keep out. Every text field has a Suggest button that reads what you've already written.
+- Races and classes: the D&D 5e core set tuned to your world (a low-magic world makes wizards rare), plus homebrew that grows out of your setting (artificers and clockwork folk in a steampunk world, planeswalkers when magic is high). Places carry demographics ("Human 60%, Dwarf 25%…"), and the AI and generators use them when they create people and towns.
+- A wiki of typed entries with stable IDs: 28 built-in types (NPCs, races, classes, settlements, factions, religions, items, creatures, lore and more) plus your own custom types and one-off custom fields on any entry.
 - `@mentions` that link and survive renames, automatic backlinks, sub-pages, full revision history with restore.
 - Visibility on everything (DM only, secret, partially known, discovered, public), `:::dm` blocks inside articles, and canon states (draft, proposed, canon, archived).
 - Explicit relationships with direction, strength, dates and visibility, and an interactive relationship graph.
@@ -114,11 +120,12 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how the pieces fit together
 Worldloom is a standard Next.js app. For production:
 
 1. Set `DATABASE_URL` to a managed Postgres (PGlite is for a single machine). The `pg_trgm` extension must be available; it is on Supabase, Neon and RDS.
-2. Run `npm run build`, then `npm start` behind HTTPS. Session cookies are `Secure` in production.
+2. Run `npm run build`, then `npm run serve` behind HTTPS. Session cookies are `Secure` whenever the connection is HTTPS.
 3. Point `UPLOAD_DIR` at persistent storage. File storage is a small driver (`src/server/services/files.ts`), so an S3 driver can replace local disk.
 4. Optionally set `ANTHROPIC_API_KEY`.
 
 ## Notes
 
+- The core races and classes come from the D&D 5e System Reference Documents (SRD 5.2, plus half-elf and half-orc from SRD 5.1) by Wizards of the Coast LLC, licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Their descriptions in Worldloom are original summaries.
 - No copyrighted monster database is included. The bestiary holds creatures you create; the D&D 5e (2024) support is limited to mechanics (XP budgets, conditions, initiative).
 - Semantic (embedding) search isn't included yet. Retrieval uses structured queries, relationships, full-text and trigram search, which keeps the AI grounded without a vector store. The context builder is the place to add it.

@@ -13,6 +13,7 @@
  * 1:1 extension table keyed by entity id.
  */
 import { z } from "zod";
+import { PREVALENCE, PEOPLE_SOURCES } from "./peoples";
 
 export type FieldKind =
   | "text"
@@ -35,6 +36,8 @@ export interface FieldDef {
   section?: "details" | "dm" | "stats";
   /** Show on list/table views. */
   inList?: boolean;
+  /** Offer the world's races or classes as suggestions while typing. */
+  suggestFrom?: "race" | "class";
 }
 
 export type EntityGroup = "people" | "places" | "powers" | "culture" | "things" | "lore" | "play";
@@ -77,8 +80,9 @@ export const ENTITY_TYPES: EntityTypeDef[] = [
     description: "A character in the world played by the DM.",
     statuses: ["alive", "dead", "missing", "imprisoned", "unknown"],
     fields: [
-      { key: "species", label: "Race / species", kind: "text", inList: true },
+      { key: "species", label: "Race", kind: "text", inList: true, suggestFrom: "race", placeholder: "Human, Dwarf, or one of your world's races" },
       { key: "occupation", label: "Occupation", kind: "text", inList: true },
+      { key: "className", label: "Class", kind: "text", suggestFrom: "class", placeholder: "Only for adventurers, casters and the like", help: "Leave blank for ordinary folk." },
       { key: "age", label: "Age", kind: "text" },
       { key: "pronouns", label: "Pronouns", kind: "text" },
       { key: "appearance", label: "Appearance", kind: "textarea" },
@@ -105,9 +109,9 @@ export const ENTITY_TYPES: EntityTypeDef[] = [
     statuses: ["active", "absent", "retired", "dead"],
     fields: [
       { key: "playerName", label: "Player", kind: "text", inList: true },
-      { key: "className", label: "Class", kind: "text", inList: true },
+      { key: "className", label: "Class", kind: "text", inList: true, suggestFrom: "class" },
       { key: "level", label: "Level", kind: "number", inList: true },
-      { key: "species", label: "Species", kind: "text" },
+      { key: "species", label: "Race", kind: "text", inList: true, suggestFrom: "race" },
       { key: "background", label: "Background", kind: "text" },
       { key: "hpMax", label: "Max HP", kind: "number", section: "stats" },
       { key: "ac", label: "Armor class", kind: "number", section: "stats" },
@@ -145,6 +149,51 @@ export const ENTITY_TYPES: EntityTypeDef[] = [
       { key: "tactics", label: "Tactics", kind: "textarea", section: "dm" },
     ],
   },
+  {
+    key: "race",
+    label: "Race",
+    plural: "Races",
+    group: "people",
+    tone: "people",
+    icon: "dna",
+    description: "A people of the world: a D&D race (species in the 2024 rules) or one of your own.",
+    statuses: ["thriving", "stable", "declining", "scattered", "endangered", "extinct"],
+    fields: [
+      { key: "prevalence", label: "How common", kind: "select", options: [...PREVALENCE], inList: true },
+      { key: "source", label: "Source", kind: "select", options: [...PEOPLE_SOURCES], inList: true },
+      { key: "playable", label: "Playable by PCs", kind: "boolean" },
+      { key: "size", label: "Size", kind: "text", placeholder: "Medium" },
+      { key: "speed", label: "Speed", kind: "text", placeholder: "30 ft." },
+      { key: "lifespan", label: "Lifespan", kind: "text" },
+      { key: "traits", label: "Traits", kind: "textarea", help: "Rules highlights: senses, resistances, signature abilities." },
+      { key: "appearance", label: "Appearance", kind: "textarea" },
+      { key: "homelands", label: "Where they live", kind: "textarea" },
+      { key: "society", label: "Place in the world", kind: "textarea", help: "How they live and how others see them." },
+      { key: "sampleNames", label: "Sample names", kind: "tags", help: "Used by the name generator for NPCs of this race." },
+      { key: "secrets", label: "Secrets", kind: "textarea", section: "dm" },
+    ],
+  },
+  {
+    key: "class",
+    label: "Class",
+    plural: "Classes",
+    group: "people",
+    tone: "people",
+    icon: "wand-sparkles",
+    description: "An adventuring class and how it exists in your world: who trains them, how common they are.",
+    fields: [
+      { key: "prevalence", label: "How common", kind: "select", options: [...PREVALENCE], inList: true },
+      { key: "source", label: "Source", kind: "select", options: [...PEOPLE_SOURCES], inList: true },
+      { key: "role", label: "Role", kind: "text", placeholder: "Front-line warrior, healer…" },
+      { key: "primaryAbility", label: "Primary ability", kind: "text" },
+      { key: "hitDie", label: "Hit die", kind: "select", options: ["d6", "d8", "d10", "d12"] },
+      { key: "inWorld", label: "How the world sees them", kind: "textarea" },
+      { key: "training", label: "Where they train", kind: "textarea", help: "Schools, orders, masters, patrons." },
+      { key: "traditions", label: "Traditions & subclasses", kind: "textarea" },
+      { key: "features", label: "Signature features", kind: "textarea", help: "For homebrew classes: what they can do." },
+      { key: "secrets", label: "Secrets", kind: "textarea", section: "dm" },
+    ],
+  },
   // Places ------------------------------------------------------------------
   {
     key: "continent",
@@ -174,6 +223,7 @@ export const ENTITY_TYPES: EntityTypeDef[] = [
     fields: [
       { key: "climate", label: "Climate", kind: "select", options: CLIMATES, inList: true },
       { key: "terrain", label: "Terrain", kind: "text", inList: true },
+      { key: "demographics", label: "Peoples", kind: "text", placeholder: "Human 60%, Dwarf 25%, Halfling 10%, other 5%", help: "Which races live here. The generators pick NPC races from this." },
       { key: "dangers", label: "Dangers", kind: "textarea" },
       { key: "resources", label: "Resources", kind: "textarea" },
     ],
@@ -191,6 +241,7 @@ export const ENTITY_TYPES: EntityTypeDef[] = [
     fields: [
       { key: "government", label: "Government", kind: "text", inList: true },
       { key: "population", label: "Population", kind: "text" },
+      { key: "demographics", label: "Peoples", kind: "text", placeholder: "Human 60%, Dwarf 25%, Halfling 10%, other 5%", help: "Which races live here. The generators pick NPC races from this." },
       { key: "economy", label: "Economy", kind: "textarea" },
       { key: "military", label: "Military", kind: "textarea" },
       { key: "laws", label: "Notable laws & customs", kind: "textarea" },
@@ -209,6 +260,7 @@ export const ENTITY_TYPES: EntityTypeDef[] = [
     fields: [
       { key: "size", label: "Size", kind: "select", options: ["Hamlet", "Village", "Town", "City", "Metropolis"], inList: true },
       { key: "population", label: "Population", kind: "text", inList: true },
+      { key: "demographics", label: "Peoples", kind: "text", placeholder: "Human 60%, Dwarf 25%, Halfling 10%, other 5%", help: "Which races live here. The generators pick NPC races from this." },
       { key: "government", label: "Government", kind: "text" },
       { key: "economy", label: "Economy", kind: "textarea" },
       { key: "defenses", label: "Defenses", kind: "textarea" },

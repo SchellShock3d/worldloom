@@ -7,7 +7,7 @@ import { authorizeCampaign, authorizeScope, authorizeWorld } from "@/server/auth
 import { requireUser } from "@/server/auth/session";
 import { assertOwned } from "@/server/auth/ownership";
 import { applyProposals, editProposal, rejectProposals } from "@/server/services/proposals";
-import { advanceWorld, generateContent, loreAction, processSessionNotes, suggestConsequences, worldFoundation, type LoreAction } from "@/server/ai/tasks/world-tasks";
+import { advanceWorld, generateContent, loreAction, processSessionNotes, suggestConsequences, type LoreAction } from "@/server/ai/tasks/world-tasks";
 import { EMERGENCY_KINDS, needSomethingNow, prepareSession, runContinuity, type EmergencyKind } from "@/server/ai/tasks/dm-tools";
 import { getAIProvider, providerInfo } from "@/server/ai/provider";
 import { durationToMinutes, type AdvanceUnit } from "@/lib/calendar";
@@ -122,16 +122,6 @@ export async function loreAction_(worldId: string, input: { entityId: string; ac
     const action = z.enum(["expand", "summarize", "connect", "motivations", "secrets"]).parse(input.action);
     const db = await getDb();
     const res = await loreAction({ db, worldId, campaignId, userId: user.id, entityId: input.entityId, action, guidance: text(2000).optional().parse(input.guidance) });
-    refresh(worldId);
-    return res;
-  });
-}
-
-export async function foundationAction(worldId: string, answers: { themes: string; conflict: string; inspirations: string; regions: string; notes: string }) {
-  return run(async () => {
-    const { user } = await authorizeWorld(worldId, "editor");
-    const db = await getDb();
-    const res = await worldFoundation({ db, worldId, campaignId: null, userId: user.id, answers });
     refresh(worldId);
     return res;
   });

@@ -37,6 +37,8 @@ import { listThreads, listQuests, listMysteries } from "@/server/services/quests
 import { listTimeline } from "@/server/services/timeline";
 import { listConsequences } from "@/server/services/play";
 import { getKnowledgeBoundary } from "@/server/services/knowledge";
+import { profileSummary, avoidLine } from "@/lib/world-profile";
+import { peoplesContext } from "@/server/services/peoples";
 
 export interface ContextRef {
   id: string;
@@ -258,7 +260,9 @@ export function worldHeader(b: WorldBundle) {
     w.description ? truncate(w.description, 800) : "",
     `Current in-world date: ${formatDate(b.calendar, b.now, { weekday: true, precision: "minute" })} (${timeOfDay(b.calendar, b.now)}${r.season ? `, ${r.season}` : ""}). Absolute time value: ${b.now}.`,
     `Calendar: ${b.calendar.months.length} months, ${b.calendar.weekdays.length}-day weeks, ${b.calendar.hoursPerDay} hours/day, ${b.calendar.minutesPerHour} minutes/hour. One day = ${b.calendar.hoursPerDay * b.calendar.minutesPerHour} time units.`,
+    profileSummary(w.settings.profile),
     w.settings.houseRules ? `House rules / style notes: ${truncate(w.settings.houseRules, 500)}` : "",
+    avoidLine(w.settings.profile),
     CREATIVITY[w.settings.aiCreativity ?? "balanced"],
   ]
     .filter(Boolean)
@@ -454,6 +458,8 @@ export async function buildDmContext(db: DB, opts: BuildContextOptions): Promise
   const ents = await retrieveEntities(db, opts.worldId, { query: opts.query, focusIds: opts.focusIds, campaignId: cid, maxEntities: opts.maxEntities ?? 18 });
 
   const sections: string[] = [worldHeader(bundle)];
+  const peoples = await peoplesContext(db, opts.worldId);
+  if (peoples) sections.push(`# Peoples of this world\nUse these when giving characters a race or class, and when describing who lives in a place.\n${peoples}`);
   if (bundle.campaign) sections.push(await campaignSection(db, bundle));
   let used = sections.join("\n\n").length;
   const add = (text: string) => {
@@ -497,6 +503,8 @@ export async function buildNpcContext(db: DB, worldId: string, npcId: string, ca
   const parts: string[] = [];
   parts.push(`You are roleplaying ${npc.name}. Everything below is what ${npc.name} knows. They know nothing else about hidden events, secrets, or other characters' private plans.`);
   parts.push(`It is ${formatDate(bundle.calendar, bundle.now, { weekday: true })}, ${timeOfDay(bundle.calendar, bundle.now)}.${bundle.campaign?.currentWeather ? ` Weather: ${bundle.campaign.currentWeather}.` : ""}`);
+  const avoid = avoidLine(bundle.world.settings.profile);
+  if (avoid) parts.push(avoid);
   // Their own card, including their own secrets.
   parts.push(await entityCard(db, worldId, npc, { campaignId: bundle.campaign?.id, bodyChars: 1200, relLimit: 12 }));
   const { own, viaGroups } = await getKnowledgeBoundary(db, worldId, npcId, bundle.campaign?.id);

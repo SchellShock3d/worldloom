@@ -14,6 +14,7 @@ import { EntityPicker, type EntityOption } from "@/components/entity/entity-pick
 import { WorldDateInput } from "@/components/common/world-date-input";
 import { Markdown } from "@/components/common/markdown";
 import { useWorld } from "@/components/shell/world-context";
+import { AiWorking } from "@/components/ai/ai-working";
 import { createConsequenceAction, deleteConsequenceAction, updateConsequenceAction } from "@/server/actions/play";
 import { consequencesAction } from "@/server/actions/ai";
 import { describeDuration, formatDate } from "@/lib/calendar";
@@ -147,6 +148,7 @@ export function ConsequencesView({ campaignId, rows, now }: { campaignId: string
       <Dialog open={suggest} onOpenChange={setSuggest}>
         <DialogContent title="What did the party do?" description="Name the people, places and factions involved. Worldloom proposes logical consequences from the current world state.">
           <Textarea value={action} onChange={(e) => setAction(e.target.value)} className="min-h-24" placeholder="The party killed the bandit captain Grell and scattered his gang" aria-label="What the party did" />
+          <AiWorking active={busy} live={w.aiProvider.live} what="Claude is thinking through the fallout" typical="under a minute" />
           <DialogFooter>
             <Button variant="ghost" onClick={() => setSuggest(false)}>
               Cancel

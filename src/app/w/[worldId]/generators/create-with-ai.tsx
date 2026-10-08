@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Field, Textarea, NativeSelect } from "@/components/ui/input";
 import { EntityPicker, type EntityOption } from "@/components/entity/entity-picker";
 import { useWorld } from "@/components/shell/world-context";
+import { AiWorking } from "@/components/ai/ai-working";
 import { generateAction } from "@/server/actions/ai";
 import { PLACE_TYPES } from "@/lib/entity-types";
 import { cn, lowerLabel } from "@/lib/utils";
@@ -84,7 +85,8 @@ export function CreateWithAI() {
         <Button variant="primary" onClick={submit} loading={pending}>
           <Sparkles /> Draft {lowerLabel(preset.label)}
         </Button>
-        {pending && <span className="text-sm text-faint">Reading your world for context…</span>}
+        {pending && !w.aiProvider.live && <span className="text-sm text-faint">Reading your world for context…</span>}
+        <AiWorking active={pending} live={w.aiProvider.live} typical="20–60 seconds" />
       </div>
       {result && (
         <div className="rounded-lg border border-arcane/40 bg-arcane-soft/40 px-4 py-3">

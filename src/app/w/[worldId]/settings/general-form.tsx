@@ -8,6 +8,7 @@ import { Field, Input, Textarea } from "@/components/ui/input";
 import { Segmented } from "@/components/ui/primitives";
 import { useWorld } from "@/components/shell/world-context";
 import { updateWorldAction } from "@/server/actions/worlds";
+import type { WorldProfile } from "@/lib/world-profile";
 
 interface GeneralValues {
   name: string;
@@ -18,9 +19,10 @@ interface GeneralValues {
   description: string;
   aiCreativity: "grounded" | "balanced" | "inventive";
   houseRules: string;
+  avoid: string;
 }
 
-export function GeneralForm({ world }: { world: GeneralValues }) {
+export function GeneralForm({ world, profile }: { world: GeneralValues; profile: WorldProfile }) {
   const w = useWorld();
   const router = useRouter();
   const [v, setV] = React.useState(world);
@@ -37,7 +39,7 @@ export function GeneralForm({ world }: { world: GeneralValues }) {
       magicLevel: v.magicLevel,
       techLevel: v.techLevel,
       description: v.description,
-      settings: { aiCreativity: v.aiCreativity, houseRules: v.houseRules },
+      settings: { aiCreativity: v.aiCreativity, houseRules: v.houseRules, profile: { ...profile, avoid: v.avoid.trim() || undefined } },
     });
     setPending(false);
     if (!res.ok) return void toast.error(res.error);
@@ -81,6 +83,9 @@ export function GeneralForm({ world }: { world: GeneralValues }) {
         </Field>
         <Field label="House rules and style notes" htmlFor="g-rules" hint="Anything the AI should always respect: banned tropes, naming conventions, content lines.">
           <Textarea id="g-rules" value={v.houseRules} onChange={(e) => set("houseRules", e.target.value)} className="min-h-24" maxLength={4000} placeholder="No resurrection magic. Elves are rare and distrusted. Keep gore off-screen." />
+        </Field>
+        <Field label="Keep out of this world" htmlFor="g-avoid" hint="Your table's lines. The AI never includes these in anything it writes for this world, including NPC roleplay.">
+          <Input id="g-avoid" value={v.avoid} onChange={(e) => set("avoid", e.target.value)} maxLength={1000} placeholder="Spiders, harm to children" />
         </Field>
       </section>
       <div className="flex gap-2">

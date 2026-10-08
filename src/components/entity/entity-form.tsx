@@ -13,7 +13,7 @@ import { WorldDateInput } from "@/components/common/world-date-input";
 import { OptionalWorldDate } from "@/components/common/visibility-select";
 import { EntityPicker, type EntityOption } from "./entity-picker";
 import { TypeGlyph } from "./type-icon";
-import { useWorld } from "@/components/shell/world-context";
+import { useWorld, useWorldOptional } from "@/components/shell/world-context";
 import { createEntityAction, updateEntityAction } from "@/server/actions/entities";
 import { CUSTOM_FIELDS_KEY, getEntityType, PLACE_TYPES, type CustomField, type FieldDef } from "@/lib/entity-types";
 import type { EntityInput } from "@/lib/validation";
@@ -401,6 +401,23 @@ export function EntityForm({ initial, refs, mode }: { initial: EntityFormValue; 
   );
 }
 
+function TextFieldInput({ id, def, value, onChange }: { id: string; def: FieldDef; value: string; onChange: (v: unknown) => void }) {
+  const world = useWorldOptional();
+  const options = def.suggestFrom ? (def.suggestFrom === "race" ? world?.peopleNames.races : world?.peopleNames.classes) ?? [] : [];
+  return (
+    <>
+      <Input id={id} value={value} onChange={(e) => onChange(e.target.value)} list={options.length ? `${id}-options` : undefined} autoComplete="off" />
+      {options.length > 0 && (
+        <datalist id={`${id}-options`}>
+          {options.map((o) => (
+            <option key={o} value={o} />
+          ))}
+        </datalist>
+      )}
+    </>
+  );
+}
+
 function FieldInput({ def, value, onChange }: { def: FieldDef; value: unknown; onChange: (v: unknown) => void }) {
   const id = `f-${def.key}`;
   const wide = def.kind === "textarea" || def.kind === "inventory" || def.kind === "abilities";
@@ -411,7 +428,7 @@ function FieldInput({ def, value, onChange }: { def: FieldDef; value: unknown; o
   );
   switch (def.kind) {
     case "text":
-      return wrap(<Input id={id} value={(value as string) ?? ""} onChange={(e) => onChange(e.target.value)} />);
+      return wrap(<TextFieldInput id={id} def={def} value={(value as string) ?? ""} onChange={onChange} />);
     case "number":
       return wrap(<Input id={id} type="number" value={value === undefined || value === null ? "" : String(value)} onChange={(e) => onChange(e.target.value === "" ? undefined : Number(e.target.value))} className="w-32" />);
     case "textarea":

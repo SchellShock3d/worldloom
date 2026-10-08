@@ -11,6 +11,7 @@ import { toAbsolute, durationToMinutes, DEFAULT_CALENDAR } from "@/lib/calendar"
 import { mentionToken } from "@/lib/mentions";
 import { createWorld } from "./worlds";
 import { createEntity } from "./entities";
+import { addCorePeoples, addHomebrewPeoples } from "./peoples";
 import { createRelationship } from "./relationships";
 import { createEvent } from "./timeline";
 import { createFact } from "./knowledge";
@@ -53,12 +54,12 @@ export async function createDemoWorld(db: DB, userId: string) {
 
   // --- Geography --------------------------------------------------------
   await mk("aldmere", { type: "continent", name: "Aldmere", summary: "The great continent, from the frozen Marches to the Ashfall Wastes.", visibility: "public", importance: 1, fields: { climate: "Temperate" } });
-  await mk("heartlands", { type: "region", name: "The Heartlands", summary: "Rolling farmland and river valleys; the breadbasket of Valeria.", locationId: id.aldmere, visibility: "public", fields: { climate: "Temperate", terrain: "Farmland, rivers" } });
-  await mk("marches", { type: "region", name: "The Northern Marches", summary: "Cold, forested borderlands where the Northroad runs to Riverfall.", locationId: id.aldmere, visibility: "public", fields: { climate: "Subarctic", terrain: "Pine forest, hills", dangers: "Wolves, bandits, early snow" } });
-  await mk("ashfall", { type: "region", name: "The Ashfall Wastes", summary: "A grey desert where a war of sorcerers burned the land three centuries ago.", locationId: id.aldmere, visibility: "public", fields: { climate: "Arid", terrain: "Ash dunes, glassed stone" } });
-  await mk("valeria", { type: "nation", name: "Kingdom of Valeria", summary: "An old kingdom with a dying king and a regent who rules in his name.", locationId: id.heartlands, visibility: "public", importance: 2, status: "in crisis", fields: { government: "Monarchy (regency)", population: "About 2 million" } });
-  await mk("empire", { type: "nation", name: "The Iron Empire", summary: "A disciplined, expansionist empire across the Grey Sea.", locationId: id.aldmere, visibility: "public", importance: 1, status: "stable", fields: { government: "Military autocracy" } });
-  await mk("highcourt", { type: "settlement", name: "Highcourt", summary: "Capital of Valeria: white walls, gilded domes, and whispers in every corridor.", locationId: id.heartlands, visibility: "public", importance: 2, fields: { size: "Metropolis", population: "120,000", government: "Royal court" } });
+  await mk("heartlands", { type: "region", name: "The Heartlands", summary: "Rolling farmland and river valleys; the breadbasket of Valeria.", locationId: id.aldmere, visibility: "public", fields: { demographics: "Human 70%, Halfling 15%, Dwarf 8%, other 7%", climate: "Temperate", terrain: "Farmland, rivers" } });
+  await mk("marches", { type: "region", name: "The Northern Marches", summary: "Cold, forested borderlands where the Northroad runs to Riverfall.", locationId: id.aldmere, visibility: "public", fields: { demographics: "Human 60%, Half-Elf 15%, Elf 10%, Half-Orc 10%, other 5%", climate: "Subarctic", terrain: "Pine forest, hills", dangers: "Wolves, bandits, early snow" } });
+  await mk("ashfall", { type: "region", name: "The Ashfall Wastes", summary: "A grey desert where a war of sorcerers burned the land three centuries ago.", locationId: id.aldmere, visibility: "public", fields: { demographics: "Human 50%, Orc 25%, Tiefling 15%, other 10%", climate: "Arid", terrain: "Ash dunes, glassed stone" } });
+  await mk("valeria", { type: "nation", name: "Kingdom of Valeria", summary: "An old kingdom with a dying king and a regent who rules in his name.", locationId: id.heartlands, visibility: "public", importance: 2, status: "in crisis", fields: { demographics: "Human 72%, Halfling 12%, Dwarf 8%, Half-Elf 4%, other 4%", government: "Monarchy (regency)", population: "About 2 million" } });
+  await mk("empire", { type: "nation", name: "The Iron Empire", summary: "A disciplined, expansionist empire across the Grey Sea.", locationId: id.aldmere, visibility: "public", importance: 1, status: "stable", fields: { demographics: "Human 80%, Dwarf 10%, Half-Orc 6%, other 4%", government: "Military autocracy" } });
+  await mk("highcourt", { type: "settlement", name: "Highcourt", summary: "Capital of Valeria: white walls, gilded domes, and whispers in every corridor.", locationId: id.heartlands, visibility: "public", importance: 2, fields: { demographics: "Human 75%, Half-Elf 10%, Halfling 8%, other 7%", size: "Metropolis", population: "120,000", government: "Royal court" } });
   await mk("stonehaven", {
     type: "settlement",
     name: "Stonehaven",
@@ -67,10 +68,10 @@ export async function createDemoWorld(db: DB, userId: string) {
     visibility: "public",
     importance: 2,
     status: "troubled",
-    fields: { size: "City", population: "18,000", government: "Merchant council", economy: "Grain, river trade, wool", defenses: "Old walls, a city watch stretched thin" },
+    fields: { size: "City", population: "18,000", demographics: "Human 60%, Halfling 20%, Dwarf 12%, Gnome 4%, other 4%", government: "Merchant council", economy: "Grain, river trade, wool", defenses: "Old walls, a city watch stretched thin" },
     body: "Stonehaven straddles the Vell river where the Northroad begins. Its granaries are the largest in Valeria.\n\n:::dm\nThe council is riddled with guild informants. Two councillors are already in the Thieves' Guild's pocket.\n:::",
   });
-  await mk("riverfall", { type: "settlement", name: "Riverfall", summary: "A northern timber town at the end of the Northroad, now gripped by sickness.", locationId: id.marches, visibility: "public", importance: 1, status: "troubled", fields: { size: "Town", population: "2,400", climate: "Subarctic" } });
+  await mk("riverfall", { type: "settlement", name: "Riverfall", summary: "A northern timber town at the end of the Northroad, now gripped by sickness.", locationId: id.marches, visibility: "public", importance: 1, status: "troubled", fields: { demographics: "Human 65%, Half-Elf 15%, Dwarf 10%, other 10%", size: "Town", population: "2,400", climate: "Subarctic" } });
   await mk("northroad", { type: "location", name: "The Northroad", summary: "The only good road between Stonehaven and the north. Merchants pay for guards — or pay the Black Hand.", locationId: id.marches, visibility: "public", importance: 1, fields: { kind: "road" } });
   await mk("greywatch", { type: "location", name: "Fort Greywatch", summary: "An undermanned fortress guarding the midpoint of the Northroad.", locationId: id.marches, visibility: "public", importance: 1, status: "troubled", fields: { kind: "fortress", features: "Two towers, one of them half-collapsed; forty soldiers where there should be two hundred." } });
   await mk("vault", {
@@ -119,6 +120,22 @@ export async function createDemoWorld(db: DB, userId: string) {
   });
   await mk("guild", { type: "faction", name: "The Stonehaven Thieves' Guild", summary: "Smugglers and fences who want a council that answers to them.", locationId: id.stonehaven, visibility: "secret", status: "active", fields: { factionType: "Guild", goals: "Overthrow the Stonehaven council." } });
   await mk("wardens", { type: "faction", name: "The Grey Wardens", summary: "The garrison order of Fort Greywatch, sworn to keep the Northroad open.", locationId: id.greywatch, visibility: "public", status: "weakened", fields: { factionType: "Knightly order", motto: "The road endures." } });
+
+  // --- Races & classes -------------------------------------------------------
+  await addCorePeoples(db, W, actor, {
+    races: { Human: "Common", Dwarf: "Common", Halfling: "Common", Elf: "Uncommon", "Half-Elf": "Uncommon", "Half-Orc": "Uncommon", Gnome: "Uncommon", Orc: "Rare", Tiefling: "Rare", Goliath: "Rare", Dragonborn: "Very rare" },
+    classes: { Fighter: "Common", Rogue: "Common", Cleric: "Common", Ranger: "Uncommon", Paladin: "Uncommon", Bard: "Uncommon", Barbarian: "Uncommon", Druid: "Uncommon", Monk: "Rare", Wizard: "Rare", Warlock: "Rare", Sorcerer: "Very rare" },
+  });
+  await addHomebrewPeoples(db, W, actor, [
+    {
+      kind: "class",
+      name: "Ashbinder",
+      prevalence: "Rare",
+      summary: "Cult-trained casters who bind the restless dead of the Ashfall war into their own breath and blood.",
+      reason: "Magic here is rare and costly, and the Wastes are full of spirits that never stopped burning.",
+      fields: { role: "Controller, curse-caster", primaryAbility: "Constitution and Charisma", hitDie: "d8", inWorld: "Hunted in Valeria; the Cult of Ash trains them in secret.", features: "Ash shroud (obscuring cloud), bound spirit that grows stronger as they take damage, burning curses that cost hit dice." },
+    },
+  ]);
 
   // --- People ----------------------------------------------------------
   await mk("aldren", { type: "npc", name: "King Aldren", summary: "The ailing king of Valeria, grieving his son and growing weaker by the week.", locationId: id.highcourt, visibility: "public", importance: 2, fields: { species: "Human", occupation: "King", age: "68", personality: "Once formidable, now confused and grief-struck." } });

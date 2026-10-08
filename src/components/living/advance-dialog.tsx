@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { FastForward } from "lucide-react";
 import { Dialog, DialogContent, DialogFooter } from "@/components/ui/overlays";
 import { Button } from "@/components/ui/button";
+import { AiWorking } from "@/components/ai/ai-working";
 import { Field, Input, NativeSelect, Textarea } from "@/components/ui/input";
 import { useWorld } from "@/components/shell/world-context";
 import { advanceWorldAction } from "@/server/actions/ai";
@@ -95,6 +96,7 @@ export function AdvanceDialog({ open, onOpenChange, campaignId, defaultNote }: {
           <Field label="What is the party doing? (optional)" htmlFor="adv-note" hint="E.g. “travelling the Northroad to Riverfall” or “resting and recovering in Stonehaven”.">
             <Textarea id="adv-note" value={note} onChange={(e) => setNote(e.target.value)} className="min-h-16" />
           </Field>
+          <AiWorking active={pending} live={w.aiProvider.live} what="Claude is working out what happens" />
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>

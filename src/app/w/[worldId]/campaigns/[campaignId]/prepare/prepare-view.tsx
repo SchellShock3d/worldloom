@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/input";
 import { Markdown } from "@/components/common/markdown";
 import { PageHeader, Panel, SectionTitle } from "@/components/ui/display";
 import { useWorld } from "@/components/shell/world-context";
+import { AiWorking } from "@/components/ai/ai-working";
 import { prepareSessionAction } from "@/server/actions/ai";
 import { createSessionAction, saveSceneAction, updateSessionAction } from "@/server/actions/sessions";
 import { saveEncounterAction } from "@/server/actions/tools";
@@ -98,6 +99,7 @@ export function PrepareView({ campaignId, campaignName, nextSession, nextNumber 
         <Button variant="arcane" size="lg" onClick={generate} loading={busy}>
           <Sparkles /> {briefing ? "Regenerate" : "Draft briefing"}
         </Button>
+        <AiWorking active={busy} live={w.aiProvider.live} what="Claude is preparing your briefing" />
       </Panel>
 
       {briefing ? (

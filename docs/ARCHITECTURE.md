@@ -45,6 +45,12 @@ In-world time is a `bigint` count of minutes since the calendar's epoch. `lib/ca
 
 Each campaign has its own clock. The world clock follows the furthest campaign, and can be advanced on its own when no campaign is selected. Weather follows the clock unless the DM locks it.
 
+### World profile and peoples
+
+The world creator stores its choices in `worlds.settings.profile` (`lib/world-profile.ts`): where magic comes from and how it's seen, the shape of the land, governments, faith, history, starting area, and the table's content limits. `worldHeader` puts a summary of it, and the limits, at the top of every AI request, including NPC roleplay.
+
+Races and classes are ordinary entries of types `race` and `class`, with a prevalence (Common to Legendary) and a source (D&D 5e core or homebrew). `lib/peoples.ts` holds the core set, the rules that tune prevalence to genre, magic and technology, and the offline homebrew bank. `services/peoples.ts` adds them to a world and summarises them for AI context. Settlements, regions and nations have a `demographics` field; the offline generators pick NPC races from the nearest place's demographics, then from world prevalence (`racePicker` in `ai/offline/generate.ts`).
+
 ### Visibility and canon
 
 Every entity, relationship, fact and map marker carries a visibility: `dm_only`, `secret`, `partially_known`, `discovered` or `public`. Articles can also hold `:::dm … :::` blocks. The player portal (`services/player-view.ts`) is built only from public and discovered material, with DM blocks, DM-section fields and DM-only custom fields stripped on the server.

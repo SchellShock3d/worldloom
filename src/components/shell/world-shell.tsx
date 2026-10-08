@@ -53,7 +53,7 @@ export function WorldShell({ worlds, pendingProposals, user, children, ...value 
       openAdvance: () => setAdvanceOpen(true),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [value.worldId, value.activeCampaign?.id, value.activeCampaign?.currentAt, value.worldNow, value.campaigns, value.customTypes, value.calendar, value.worldName],
+    [value.worldId, value.activeCampaign?.id, value.activeCampaign?.currentAt, value.worldNow, value.campaigns, value.customTypes, value.calendar, value.worldName, value.aiProvider.live, value.aiProvider.problem, JSON.stringify(value.peopleNames)],
   );
 
   React.useEffect(() => {

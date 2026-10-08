@@ -15,7 +15,7 @@ import { COPILOT_IDENTITY, typeReference } from "../prompts";
 import { aiRef } from "../changeset";
 import { Rng, hashSeed } from "../offline/rng";
 import * as B from "../offline/banks";
-import { nameGenerator } from "../offline/generate";
+import { nameGenerator, racePicker } from "../offline/generate";
 import { forgottenThreads, unfinishedBusiness, continuityIssues, type Insight } from "@/server/services/insights";
 import { listQuests, listMysteries, listThreads } from "@/server/services/quests";
 import { listConsequences } from "@/server/services/play";
@@ -200,7 +200,7 @@ export async function needSomethingNow(db: DB, opts: { worldId: string; campaign
         schema: emergencySchema,
         fast: true,
         maxTokens: 1500,
-        system: `${COPILOT_IDENTITY}\nYou're generating something the DM needs RIGHT NOW at the table. Be quick, concrete and usable immediately. Fit the current scene, location and world. In "text", anything the players must not learn (secrets, hidden motives, whether a rumour is true) goes inside a DM block: a line ":::dm", the secret lines, then a line ":::".`,
+        system: `${COPILOT_IDENTITY}\nYou're generating something the DM needs RIGHT NOW at the table. Be quick, concrete and usable immediately. Fit the current scene, location and world. In "text", anything the players must not learn (secrets, hidden motives, whether a rumour is true) goes inside a DM block: a line ":::dm", the secret lines, then a line ":::". For a person, set the "species" field to one of the world's races (weighted by how common they are, and by who lives in the current place), and "className" only for adventurers and spellcasters, not ordinary folk.`,
         messages: [{ role: "user", content: `${ctx.text}\n\n# Task\nGive me one ${opts.kind}${opts.hint ? ` (${opts.hint})` : ""}. Make it new: not a person, place or thing already in the records above (though it can be connected to them). Title it with its own name. Type reference: ${typeReference(["npc", "shop", "tavern", "location", "item", "magic_item"])}` }],
       });
       return { kind: opts.kind, title: out.title, text: normalizeDmBlocks(out.text), entityType: out.entityType && getEntityType(out.entityType).description !== "Unknown type" ? out.entityType : null, summary: out.summary, fields: Object.fromEntries(out.fields.map((f) => [f.key, f.value])), locationId, provider: provider.name };
@@ -231,7 +231,8 @@ async function offlineEmergency(db: DB, opts: { worldId: string; campaignId: str
     case "npc": {
       const n = name();
       const occ = rng.pick(B.OCCUPATIONS);
-      const fields = { occupation: occ, species: rng.pick(B.SPECIES), personality: rng.pick(B.PERSONALITY), mannerisms: rng.pick(B.MANNERISMS), motivations: rng.pick(B.MOTIVATIONS), appearance: rng.pick(B.APPEARANCE), secrets: rng.pick(B.SECRETS) };
+      const pickRace = await racePicker(db, opts.worldId, rng, locationId);
+      const fields = { occupation: occ, species: pickRace(), personality: rng.pick(B.PERSONALITY), mannerisms: rng.pick(B.MANNERISMS), motivations: rng.pick(B.MOTIVATIONS), appearance: rng.pick(B.APPEARANCE), secrets: rng.pick(B.SECRETS) };
       return { ...base, title: n, entityType: "npc", summary: `${fields.species} ${occ}`, fields, text: `**${n}**, ${fields.species} ${occ}\n- ${fields.appearance}\n- ${fields.personality}; ${fields.mannerisms}\n- Wants to ${fields.motivations}\n\n:::dm\n_Secret:_ ${fields.secrets}\n:::` };
     }
     case "name":

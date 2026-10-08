@@ -22,6 +22,7 @@ import { Field, Textarea } from "@/components/ui/input";
 import { deleteEntityAction, updateEntityAction } from "@/server/actions/entities";
 import { consequencesAction, loreAction_ } from "@/server/actions/ai";
 import { useWorld } from "@/components/shell/world-context";
+import { AiWorking } from "@/components/ai/ai-working";
 import type { LoreAction } from "@/server/ai/tasks/world-tasks";
 
 export function EntityActions({
@@ -170,6 +171,7 @@ export function EntityActions({
             <Field label="Guidance (optional)" htmlFor="lore-guidance" hint="E.g. “make her morally grey” or “tie it to the plague”.">
               <Textarea id="lore-guidance" value={guidance} onChange={(e) => setGuidance(e.target.value)} className="min-h-16" />
             </Field>
+            <AiWorking active={busy} live={w.aiProvider.live} typical="20–40 seconds" />
             <DialogFooter>
               <Button variant="ghost" onClick={() => setLore(null)}>
                 Cancel

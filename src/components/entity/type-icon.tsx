@@ -5,6 +5,7 @@ import {
   CalendarClock,
   Castle,
   DoorClosed,
+  Dna,
   Earth,
   Flag,
   Gem,
@@ -26,6 +27,7 @@ import {
   Swords,
   UserRound,
   Users,
+  WandSparkles,
   type LucideIcon,
 } from "lucide-react";
 import { getEntityType, type EntityGroup } from "@/lib/entity-types";
@@ -41,6 +43,8 @@ export const ICONS: Record<string, LucideIcon> = {
   castle: Castle,
   "map-pin": MapPin,
   "door-closed": DoorClosed,
+  dna: Dna,
+  "wand-sparkles": WandSparkles,
   landmark: Landmark,
   store: Store,
   beer: Beer,

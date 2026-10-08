@@ -21,6 +21,8 @@ export interface WorldShellValue {
   campaigns: ShellCampaign[];
   activeCampaign: ShellCampaign | null;
   customTypes: CustomTypeLike[];
+  /** Names of the world's races and classes, for suggestions in forms. */
+  peopleNames: { races: string[]; classes: string[] };
   /** `problem`: Claude is configured but recently failed (e.g. no API credits). */
   aiProvider: { name: string; live: boolean; problem?: string | null };
   openQuickCreate: (opts?: { type?: string; defaults?: Partial<EntityInput>; onCreated?: (e: { id: string; name: string; type: string }) => void }) => void;
@@ -33,6 +35,11 @@ const Ctx = React.createContext<WorldShellValue | null>(null);
 
 export function WorldShellProvider({ value, children }: { value: WorldShellValue; children: React.ReactNode }) {
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+}
+
+/** For components that also render outside a world (returns null there). */
+export function useWorldOptional(): WorldShellValue | null {
+  return React.useContext(Ctx);
 }
 
 export function useWorld(): WorldShellValue {

@@ -37,7 +37,9 @@ import {
   TriangleAlert,
   UserRound,
   Waypoints,
-  type LucideIcon, Eye } from "lucide-react";
+  type LucideIcon, Eye,
+  Dna,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LogoMark } from "./logo";
 import { useWorld } from "./world-context";
@@ -81,6 +83,7 @@ export function Sidebar({ worlds, pendingProposals, mobileOpen, onMobileClose }:
     { href: base, label: "Dashboard", icon: LayoutDashboard, exact: true },
     { href: `${base}/wiki`, label: "Wiki", icon: BookOpen },
     { href: `${base}/characters`, label: "Characters", icon: UserRound },
+    { href: `${base}/peoples`, label: "Races & classes", icon: Dna },
     { href: `${base}/locations`, label: "Places", icon: Mountain },
     { href: `${base}/factions`, label: "Factions & faiths", icon: Swords },
     { href: `${base}/items`, label: "Items", icon: Gem },

@@ -51,7 +51,8 @@ export default async function SettingsPage({ params, searchParams }: { params: P
 
       {tab === "general" && (
         <GeneralForm
-          world={{ name: world.name, genre: world.genre, tone: world.tone, magicLevel: world.magicLevel, techLevel: world.techLevel, description: world.description, aiCreativity: world.settings.aiCreativity ?? "balanced", houseRules: world.settings.houseRules ?? "" }}
+          world={{ name: world.name, genre: world.genre, tone: world.tone, magicLevel: world.magicLevel, techLevel: world.techLevel, description: world.description, aiCreativity: world.settings.aiCreativity ?? "balanced", houseRules: world.settings.houseRules ?? "", avoid: world.settings.profile?.avoid ?? "" }}
+          profile={world.settings.profile ?? {}}
         />
       )}
       {tab === "calendar" && <CalendarEditor initial={calendar} now={world.currentAt} />}

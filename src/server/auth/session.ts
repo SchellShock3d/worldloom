@@ -14,6 +14,17 @@ const hashToken = (token: string) => createHash("sha256").update(token).digest("
 
 export type SessionUser = Pick<User, "id" | "email" | "name" | "preferences">;
 
+/**
+ * Whether the browser reached us over HTTPS. Next's server sets x-forwarded-proto for direct
+ * connections and proxies pass theirs on, so this is right for http://localhost, a LAN address,
+ * and an HTTPS deployment alike. Secure cookies over plain HTTP would silently break sign-in.
+ */
+async function requestIsHttps() {
+  const proto = (await headers()).get("x-forwarded-proto")?.split(",")[0]?.trim().toLowerCase();
+  if (proto) return proto === "https";
+  return process.env.NODE_ENV === "production";
+}
+
 export async function createSession(userId: string) {
   const db = await getDb();
   const token = randomBytes(32).toString("base64url");
@@ -24,7 +35,7 @@ export async function createSession(userId: string) {
   jar.set(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production" && process.env.INSECURE_COOKIES !== "true",
+    secure: process.env.INSECURE_COOKIES !== "true" && (await requestIsHttps()),
     path: "/",
     expires: expiresAt,
   });

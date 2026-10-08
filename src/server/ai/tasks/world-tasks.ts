@@ -5,7 +5,8 @@ import { entities, gameSessions, travelPlans } from "@/server/db/schema";
 import { describeDuration, formatDate } from "@/lib/calendar";
 import { getEntityType } from "@/lib/entity-types";
 import { mentionsToPlain } from "@/lib/mentions";
-import { buildDmContext, loadWorldBundle, entityCard } from "../context";
+import { buildDmContext, loadWorldBundle, entityCard, worldHeader } from "../context";
+import { peoplesContext } from "@/server/services/peoples";
 import { typeReference } from "../prompts";
 import { emptyChangeSet } from "../changeset";
 import { offlineGenerate, detectType } from "../offline/generate";
@@ -263,10 +264,30 @@ export async function loreAction(b: Base & { entityId: string; action: LoreActio
 // Onboarding: proposed world foundation
 // ---------------------------------------------------------------------------
 
-export async function worldFoundation(b: Base & { answers: { themes: string; conflict: string; inspirations: string; regions: string; notes: string } }): Promise<ChangeSetTaskResult> {
+type FoundationAnswers = { themes: string; conflict: string; inspirations: string; regions: string; notes: string };
+
+export async function worldFoundation(b: Base & { answers?: FoundationAnswers }): Promise<ChangeSetTaskResult> {
   const bundle = await loadWorldBundle(b.db, b.worldId, null);
   const w = bundle.world;
-  const ctx = `# World: ${w.name}\nGenre: ${w.genre} · Tone: ${w.tone} · Magic: ${w.magicLevel} · Technology: ${w.techLevel}\n${w.description}\nCurrent date: ${formatDate(bundle.calendar, bundle.now)}`;
+  const p = w.settings.profile ?? {};
+  // Answers from the older single-page form still work; the creator stores everything in the profile.
+  const answers: FoundationAnswers = {
+    themes: b.answers?.themes || p.themes || "",
+    conflict: b.answers?.conflict || p.conflict || "",
+    inspirations: b.answers?.inspirations || p.inspirations || "",
+    regions: b.answers?.regions || p.regions || "",
+    notes: b.answers?.notes || "",
+  };
+  const peoples = await peoplesContext(b.db, b.worldId);
+  const ctx = [
+    worldHeader(bundle),
+    peoples ? `# Peoples of this world\n${peoples}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+  const nations = p.nationCount ? `${p.nationCount}` : "2–4";
+  const factions = p.factionCount ? `${p.factionCount}` : "3–5";
+  const religion = p.religionStyle ? `religions that fit "${p.religionStyle}"${/no gods|dead|silent/i.test(p.religionStyle) ? " (faiths and cults may exist without active gods; create deities only if they fit)" : ", each with its deity or deities"}` : "2–3 religions each with a deity";
   return runChangeSetTask({
     ...b,
     campaignId: null,
@@ -277,18 +298,20 @@ export async function worldFoundation(b: Base & { answers: { themes: string; con
     now: bundle.now,
     calendar: bundle.calendar,
     maxTokens: 32000,
-    instructions: `Build a PROPOSED foundation for this new world from the DM's answers:
-- Themes: ${b.answers.themes || "(none given)"}
-- Central conflict: ${b.answers.conflict || "(none given)"}
-- Inspirations: ${b.answers.inspirations || "(none given)"}
-- Regions / geography wanted: ${b.answers.regions || "(none given)"}
-- Other notes: ${b.answers.notes || "(none)"}
+    instructions: `Build a PROPOSED foundation for this new world from the DM's choices above and these answers:
+- Themes: ${answers.themes || "(none given)"}
+- Central conflict: ${answers.conflict || "(none given)"}
+- Inspirations: ${answers.inspirations || "(none given)"}
+- Regions / geography wanted: ${answers.regions || "(none given)"}${p.worldShape ? ` (world shape: ${p.worldShape})` : ""}
+- Other notes: ${answers.notes || "(none)"}
 
-Create, as newEntities: a short world-overview lore page (type lore, importance 2), 1 continent, 3–5 major regions (located in the continent), 2–4 starting nations (located in regions), 2–3 religions each with a deity, 3–5 major factions with clear goals, and 2–3 world_thread entities representing the ongoing conflicts. Add 4–6 historical events (events with yearsAgo) that explain how the world got here. Connect everything with relationships (nations at war/allied, factions controlling regions, deities worshipped by religions, factions driving threads). Keep names original and evocative; avoid famous published settings. Keep every body to one or two short paragraphs: this is a foundation the DM will expand, not an encyclopedia.
+Create, as newEntities: a short world-overview lore page (type lore, importance 2), the landmass or landmasses the world shape implies, 3–5 major regions (located in them), ${nations} starting nations (located in regions)${p.governments?.length ? ` using these government styles: ${p.governments.join(", ")}` : ""}, ${religion}, ${factions} major factions with clear goals, and 2–3 world_thread entities representing the ongoing conflicts.${p.landmarks ? ` Include these landmarks: ${p.landmarks}.` : ""}${p.detailStart || p.startingArea ? ` Detail the starting area${p.startingArea ? ` (${p.startingArea})` : ""}: one settlement with a tavern and 3 NPCs with goals and secrets.` : ""} Add 4–6 historical events (events with yearsAgo) that explain how the world got here${p.historyHooks?.length ? `, including: ${p.historyHooks.join(", ")}` : ""}.
+${peoples ? `Use the world's races and classes listed under Peoples: give every region, nation and settlement a demographics field (e.g. "Human 55%, Dwarf 25%, Halfling 15%, other 5%") that reflects how common each race is and where it would live; tie at least one nation and one faction to a specific race; give NPCs a species field from those races and a className only if they're adventurers or casters. Homebrew races and classes are as real as core ones.` : ""}
+Connect everything with relationships (nations at war/allied, factions controlling regions, deities worshipped by religions, factions driving threads). Keep names original and evocative; avoid famous published settings. Keep every body to one or two short paragraphs: this is a foundation the DM will expand, not an encyclopedia.
 
 Entity types and fields:
-${typeReference(["lore", "continent", "region", "nation", "religion", "deity", "faction", "world_thread", "settlement"])}`,
-    offline: async () => offlineFoundation(b.db, b.worldId, b.answers),
+${typeReference(["lore", "continent", "region", "nation", "settlement", "tavern", "npc", "religion", "deity", "faction", "world_thread"])}`,
+    offline: async () => offlineFoundation(b.db, b.worldId, answers),
   });
 }
 

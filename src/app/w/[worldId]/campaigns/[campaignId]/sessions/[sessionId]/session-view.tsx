@@ -13,6 +13,7 @@ import { Markdown, type RefMap } from "@/components/common/markdown";
 import { MarkdownEditor } from "@/components/common/markdown-editor";
 import { TypeIcon } from "@/components/entity/type-icon";
 import { useWorld } from "@/components/shell/world-context";
+import { AiWorking } from "@/components/ai/ai-working";
 import { deleteSessionAction, updateSessionAction } from "@/server/actions/sessions";
 import { processSessionAction } from "@/server/actions/ai";
 import { formatDate } from "@/lib/calendar";
@@ -43,6 +44,7 @@ export function SessionView({
   const [editing, setEditing] = React.useState<Field | null>(null);
   const [draft, setDraft] = React.useState("");
   const [busy, setBusy] = React.useState(false);
+  const [analysing, setAnalysing] = React.useState(false);
   const [title, setTitle] = React.useState(session.title);
   const cb = `/w/${w.worldId}/campaigns/${campaignId}`;
 
@@ -56,8 +58,10 @@ export function SessionView({
   };
   const process = async () => {
     setBusy(true);
+    setAnalysing(true);
     const res = await processSessionAction(w.worldId, campaignId, session.id);
     setBusy(false);
+    setAnalysing(false);
     if (!res.ok) return toast.error(res.error);
     router.push(`/w/${w.worldId}/proposals/${res.data.batchId}`);
   };
@@ -149,6 +153,7 @@ export function SessionView({
               <Sparkles /> {session.status === "processed" ? "Analyse notes again" : "Analyse notes"}
             </Button>
           )}
+          <AiWorking active={analysing} live={w.aiProvider.live} what="Claude is reading your notes" />
           <ConfirmDialog
             trigger={
               <Button variant="danger-ghost" size="sm">

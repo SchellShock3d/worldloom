@@ -38,6 +38,7 @@ import {
 } from "drizzle-orm/pg-core";
 import type { CalendarDefinition } from "@/lib/calendar";
 import type { FieldDef } from "@/lib/entity-types";
+import type { WorldProfile } from "@/lib/world-profile";
 
 // ---------------------------------------------------------------------------
 // Helpers & enums
@@ -127,7 +128,7 @@ export const worlds = pgTable("worlds", {
   /** World clock: the latest in-world moment that canon has reached. */
   currentAt: worldTime("current_at").notNull().default(0),
   coverFileId: uuid("cover_file_id").references((): AnyPgColumn => files.id, { onDelete: "set null" }),
-  settings: jsonb("settings").$type<{ aiCreativity?: "grounded" | "balanced" | "inventive"; houseRules?: string }>().notNull().default({}),
+  settings: jsonb("settings").$type<{ aiCreativity?: "grounded" | "balanced" | "inventive"; houseRules?: string; profile?: WorldProfile }>().notNull().default({}),
   createdBy: uuid("created_by")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),

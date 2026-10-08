@@ -5,9 +5,10 @@
   "description": "A living-world operating system for Dungeon Masters, with AI as the intelligence layer.",
   "type": "module",
   "scripts": {
-    "dev": "next dev -p 3000",
+    "dev": "next dev --turbopack -p 3000",
     "build": "next build",
-    "start": "next start -p 3000",
+    "start": "node scripts/start.mjs",
+    "serve": "next start -p 3000",
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/migrate.ts",

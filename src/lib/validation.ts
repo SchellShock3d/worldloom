@@ -4,6 +4,7 @@
  * submission goes through.
  */
 import { z } from "zod";
+import { worldProfileSchema } from "./world-profile";
 
 export const uuid = z.string().uuid();
 
@@ -54,6 +55,7 @@ export const worldInput = z.object({
   description: z.string().trim().max(5000).default(""),
   calendarPreset: z.string().max(40).optional(),
   startYear: z.number().int().min(-100000).max(100000).optional(),
+  profile: worldProfileSchema.optional(),
 });
 export type WorldInput = z.infer<typeof worldInput>;
 
@@ -61,6 +63,7 @@ export type WorldInput = z.infer<typeof worldInput>;
 export const worldSettingsInput = z.object({
   aiCreativity: z.enum(["grounded", "balanced", "inventive"]).optional(),
   houseRules: z.string().max(4000).optional(),
+  profile: worldProfileSchema.optional(),
 });
 
 export const campaignInput = z.object({

@@ -2,7 +2,7 @@ import { requireUser } from "@/server/auth/session";
 import { getDb } from "@/server/db/client";
 import { listWorldsForUser } from "@/server/services/worlds";
 import { Wordmark } from "@/components/shell/logo";
-import { OnboardingWizard } from "./wizard";
+import { WorldCreator } from "./creator/creator";
 import { getAIProvider } from "@/server/ai/provider";
 
 export const metadata = { title: "Create a world" };
@@ -19,8 +19,8 @@ export default async function OnboardingPage() {
       <header className="flex h-14 items-center border-b border-line px-4 sm:px-8">
         <Wordmark />
       </header>
-      <main className="mx-auto max-w-3xl px-4 py-10 sm:px-8">
-        <OnboardingWizard firstWorld={!worlds.length} userName={user.name} aiLive={ai.live} />
+      <main className="mx-auto max-w-5xl px-4 py-10 sm:px-8">
+        <WorldCreator firstWorld={!worlds.length} userName={user.name} aiLive={ai.live} />
       </main>
     </div>
   );

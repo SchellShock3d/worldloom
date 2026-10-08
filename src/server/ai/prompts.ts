@@ -30,4 +30,5 @@ export const CHANGESET_RULES = `Output rules for proposals:
 - For an optional reference with nothing to point at, use {"id": "", "ref": "", "name": ""}. Empty strings mean "none" or "keep as is"; "unchanged" leaves a status alone.
 - Leave arrays empty when they don't apply. Do not pad, and never output a placeholder or stand-in: if something has no proper place in these sections, leave it out and mention it in the summary.
 - Keep each rationale to one short sentence explaining why this follows from the records.
-- Put secrets and twists inside a ':::dm' block in bodies so they stay hidden from players.`;
+- Put secrets and twists inside a ':::dm' block in bodies so they stay hidden from players.
+- When the world lists its peoples, give each new NPC a race (field "species") from that list, and a class (field "className") only if they're an adventurer or caster. Give new settlements, regions and nations a "demographics" field such as "Human 60%, Dwarf 25%, Halfling 10%, other 5%" built from those races. Homebrew races and classes are as real as core ones.`;

@@ -25,6 +25,7 @@ export async function createWorld(db: DB, actor: Actor & { userId: string }, raw
         description: input.description,
         createdBy: actor.userId,
         currentAt,
+        ...(input.profile ? { settings: { profile: input.profile } } : {}),
       })
       .returning();
     if (!world) throw new Error("World insert failed");

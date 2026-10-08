@@ -1,6 +1,6 @@
 // Starts a production server on a fresh, throwaway database for Playwright.
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, rmSync } from "node:fs";
+import { existsSync, readdirSync, rmSync, statSync } from "node:fs";
 import path from "node:path";
 
 const port = process.argv[2] ?? "3100";
@@ -9,7 +9,11 @@ const data = path.join(root, ".data", "e2e");
 rmSync(data, { recursive: true, force: true });
 
 const distDir = ".next-e2e";
-if (!existsSync(path.join(root, distDir, "BUILD_ID")) || process.env.E2E_REBUILD === "1") {
+// Rebuild when the code is newer than the last e2e build, so tests never run against stale code.
+const newest = (dir) => readdirSync(dir, { withFileTypes: true }).reduce((m, e) => Math.max(m, e.isDirectory() ? newest(path.join(dir, e.name)) : statSync(path.join(dir, e.name)).mtimeMs), 0);
+const buildId = path.join(root, distDir, "BUILD_ID");
+const stale = !existsSync(buildId) || ["src", "drizzle"].some((d) => newest(path.join(root, d)) > statSync(buildId).mtimeMs);
+if (stale || process.env.E2E_REBUILD === "1") {
   const b = spawnSync("npx", ["next", "build"], { cwd: root, stdio: "inherit", env: { ...process.env, NEXT_DIST_DIR: distDir } });
   if (b.status !== 0) process.exit(b.status ?? 1);
 }

@@ -30,8 +30,7 @@ test("sign up, create a world and its first campaign", async ({ page }) => {
 
   await page.locator("#ob-name").fill("Vellmoor");
   await page.locator("#ob-tone").fill("Salt, smugglers and drowned gods");
-  await page.getByRole("button", { name: "Create world" }).click();
-  await page.getByRole("button", { name: /Start blank/ }).click();
+  await page.getByRole("button", { name: "Create it now, fill in later" }).click();
   await page.waitForURL(/\/campaigns\/new/);
 
   await page.locator("#c-name").fill("The Salt Road");
@@ -134,6 +133,7 @@ test.describe("signed in", () => {
       "",
       "/wiki",
       "/characters",
+      "/peoples",
       "/locations",
       "/culture",
       "/rumours",
@@ -163,5 +163,57 @@ test.describe("signed in", () => {
       expect(res?.status(), p).toBe(200);
       await expectNoErrorPage(page);
     }
+  });
+});
+
+test.describe("world creator", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/login");
+    await page.locator("#email").fill(email);
+    await page.locator("#password").fill(password);
+    await page.getByRole("button", { name: /sign in|log in/i }).click();
+    await page.waitForURL((u) => !u.pathname.startsWith("/login"));
+  });
+
+  test("walk every step, add homebrew, and create a world with its races and classes", async ({ page }) => {
+    await page.goto("/onboarding");
+    await page.locator("#ob-name").fill("Brassmoor");
+    await page.getByRole("group", { name: "Genre" }).getByRole("button", { name: "Steampunk" }).click();
+    await page.getByRole("button", { name: "Suggest the pitch" }).click();
+    await expect(page.getByLabel("Suggestions").getByRole("button").first()).toBeVisible();
+    await page.getByLabel("Suggestions").getByRole("button").first().click();
+    await expect(page.locator("#ob-desc")).not.toHaveValue("");
+
+    await page.getByRole("button", { name: /Magic & technology/ }).last().click();
+    await page.getByRole("group", { name: "Magic level" }).getByRole("button", { name: "High" }).click();
+    await page.getByRole("group", { name: "Technology level" }).getByRole("button", { name: "Industrial", exact: true }).click();
+    await expect(page.getByText("In a world like this")).toBeVisible();
+    await expect(page.getByText(/Artificer/).first()).toBeVisible();
+
+    await page.getByRole("button", { name: /The land/ }).last().click();
+    await page.getByRole("group", { name: "World shape" }).getByRole("button", { name: "An archipelago" }).click();
+    await page.getByRole("button", { name: /Peoples/ }).last().click();
+    await expect(page.getByRole("heading", { name: /Races/ }).first()).toBeVisible();
+    await page.locator("#prev-Elf").selectOption("Absent");
+    await page.getByRole("button", { name: "Suggest homebrew" }).click();
+    const artificer = page.getByRole("listitem").filter({ hasText: "Artificer" }).first();
+    await artificer.getByRole("button", { name: /Add/ }).click();
+    await expect(page.getByText("Added to your world")).toBeVisible();
+
+    await page.getByRole("button", { name: /Powers & history/ }).last().click();
+    await page.getByRole("group", { name: "Religion style" }).getByRole("button", { name: "One god" }).click();
+    await page.getByRole("button", { name: /Where play begins/ }).last().click();
+    await page.locator("#ob-avoid").fill("Spiders");
+    await page.getByRole("button", { name: /Review/ }).last().click();
+    await expect(page.getByText("Artificer").first()).toBeVisible();
+    await page.getByRole("button", { name: "Create the world only" }).click();
+    await page.waitForURL(/\/campaigns\/new/);
+
+    const world = new URL(page.url()).pathname.split("/campaigns/")[0]!;
+    await page.goto(`${world}/peoples`);
+    await expect(page.getByRole("link", { name: /Artificer/ })).toBeVisible();
+    await expect(page.getByRole("link", { name: /^Gnome/ })).toBeVisible();
+    await expect(page.getByRole("link", { name: /^Elf/ })).toHaveCount(0);
+    await expectNoErrorPage(page);
   });
 });

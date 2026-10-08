@@ -3,7 +3,7 @@
  * (names from the world's own tables/cultures, the requested location, nearby
  * factions). Produces the same change-set shape the model would.
  */
-import { and, eq, ilike, inArray, isNull, or } from "drizzle-orm";
+import { and, eq, ilike, inArray, isNull, ne, or } from "drizzle-orm";
 import type { DB } from "@/server/db/client";
 import { entities, randomTableEntries, randomTables } from "@/server/db/schema";
 import { emptyChangeSet, type ChangeSet, type AiRef } from "../changeset";
@@ -11,6 +11,7 @@ import { findNamedEntities } from "../context";
 import { Rng, hashSeed } from "./rng";
 import * as B from "./banks";
 import { ENTITY_TYPE_MAP } from "@/lib/entity-types";
+import { parseDemographics, prevalenceWeight, singularPeople } from "@/lib/peoples";
 
 const TYPE_WORDS: [RegExp, string][] = [
   [/\b(tavern|inn|alehouse|pub)\b/i, "tavern"],
@@ -84,6 +85,53 @@ interface GenOpts {
   seed?: number;
 }
 
+/**
+ * Pick NPC races the way the world would: from the nearest place's "Peoples" field (a settlement,
+ * then its region or nation), else from how common each of the world's races is, else a default mix.
+ */
+export async function racePicker(db: DB, worldId: string, rng: Rng, locationId?: string | null) {
+  const races = await db
+    .select({ name: entities.name, fields: entities.fields })
+    .from(entities)
+    .where(and(eq(entities.worldId, worldId), eq(entities.type, "race"), ne(entities.canonStatus, "archived")));
+  const byName = new Map(races.map((r) => [singularPeople(r.name), r.name]));
+  let current = locationId ?? null;
+  for (let i = 0; current && i < 8; i++) {
+    const [row] = await db.select({ fields: entities.fields, next: entities.locationId }).from(entities).where(and(eq(entities.id, current), eq(entities.worldId, worldId)));
+    if (!row) break;
+    const shares = parseDemographics((row.fields as Record<string, unknown>)?.demographics as string | undefined).filter((d) => !/^(other|others|various|misc)/i.test(d.name));
+    if (shares.length) {
+      const weighted = shares.map((d) => ({ value: byName.get(singularPeople(d.name)) ?? d.name.replace(/^\w/, (c) => c.toUpperCase()), weight: d.percent }));
+      return () => rng.weighted(weighted);
+    }
+    current = row.next;
+  }
+  const weighted = races.map((r) => ({ value: r.name, weight: prevalenceWeight((r.fields as Record<string, unknown>)?.prevalence as string) })).filter((r) => r.weight > 0);
+  if (weighted.length) return () => rng.weighted(weighted);
+  return () => rng.pick(B.SPECIES).replace(/^\w/, (c) => c.toUpperCase());
+}
+
+/** A plausible "Peoples" line for a new place, from the world's races. */
+export async function demographicsFor(db: DB, worldId: string, rng: Rng): Promise<string> {
+  const races = await db
+    .select({ name: entities.name, fields: entities.fields })
+    .from(entities)
+    .where(and(eq(entities.worldId, worldId), eq(entities.type, "race"), ne(entities.canonStatus, "archived")));
+  if (!races.length) return "";
+  const scored = races
+    .map((r) => ({ name: r.name, w: prevalenceWeight((r.fields as Record<string, unknown>)?.prevalence as string) * (0.5 + rng.float()) }))
+    .sort((a, b) => b.w - a.w)
+    .slice(0, 4);
+  const total = scored.reduce((t, r) => t + r.w, 0);
+  let left = 100;
+  const parts = scored.map((r, i) => {
+    const pct = i === scored.length - 1 ? Math.max(1, left - 5) : Math.max(2, Math.round((r.w / total) * 95));
+    left -= pct;
+    return `${r.name} ${pct}%`;
+  });
+  return `${parts.join(", ")}${left > 0 ? `, other ${left}%` : ""}`;
+}
+
 export async function offlineGenerate(db: DB, opts: GenOpts): Promise<ChangeSet> {
   const rng = new Rng(opts.seed ?? hashSeed(opts.request, Date.now()));
   const type = opts.type ?? detectType(opts.request) ?? "npc";
@@ -104,19 +152,21 @@ export async function offlineGenerate(db: DB, opts: GenOpts): Promise<ChangeSet>
     .where(and(eq(entities.worldId, opts.worldId), eq(entities.type, "faction"), or(isNull(entities.campaignId), opts.campaignId ? eq(entities.campaignId, opts.campaignId) : isNull(entities.campaignId))))
     .limit(20);
   const name = await nameGenerator(db, opts.worldId, rng);
+  const pickRace = await racePicker(db, opts.worldId, rng, location?.id);
+  const demographics = type === "settlement" ? await demographicsFor(db, opts.worldId, rng) : "";
   const where = location ? ` in ${location.name}` : "";
 
   const npc = (ref: string, occupation?: string) => {
     const n = name();
     const occ = occupation ?? rng.pick(B.OCCUPATIONS);
-    const species = rng.pick(B.SPECIES);
+    const species = pickRace();
     const motivation = rng.pick(B.MOTIVATIONS);
     const secret = rng.pick(B.SECRETS);
     cs.newEntities.push({
       ref,
       type: "npc",
       name: n,
-      summary: `A ${rng.pick(B.PERSONALITY).split(",")[0]} ${species} ${occ}${where}.`,
+      summary: `A ${rng.pick(B.PERSONALITY).split(",")[0]} ${species.toLowerCase()} ${occ}${where}.`,
       body: `${n} wants to ${motivation}.\n\n:::dm\n${n} ${secret}.\n:::`,
       status: "alive",
       location: locRef,
@@ -250,6 +300,7 @@ export async function offlineGenerate(db: DB, opts: GenOpts): Promise<ChangeSet>
             { key: "population", value: String(rng.int(2, 60) * 100) },
             { key: "government", value: rng.pick(["Elected reeve", "Hereditary lord", "Merchant council", "Temple elders"]) },
             { key: "notableFeatures", value: rng.pick(B.SETTLEMENT_FEATURES) },
+            ...(demographics ? [{ key: "demographics", value: demographics }] : []),
           ],
           tags: [],
           aliases: [],

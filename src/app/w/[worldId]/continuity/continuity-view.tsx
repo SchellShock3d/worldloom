@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/display";
 import { TypeIcon } from "@/components/entity/type-icon";
 import { useWorld } from "@/components/shell/world-context";
+import { AiWorking } from "@/components/ai/ai-working";
 import { continuityAction } from "@/server/actions/ai";
 import type { Insight } from "@/server/services/insights";
 import { cn } from "@/lib/utils";
@@ -68,6 +69,7 @@ export function ContinuityView({ issues: initial, forgotten, campaign, canEdit }
             </Button>
           )}
         </div>
+        <AiWorking active={pending} live={w.aiProvider.live} what="Claude is reviewing your records" typical="under a minute" />
         {sorted.length ? (
           <ul className="flex flex-col divide-y divide-line rounded-lg border border-line bg-surface">
             {sorted.map((i) => (

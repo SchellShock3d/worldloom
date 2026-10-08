@@ -32,6 +32,8 @@ const { generateContent, processSessionNotes, advanceWorld, suggestConsequences,
 const { assistantTurn } = await import("../src/server/ai/tasks/assistant");
 const { needSomethingNow, prepareSession, runContinuity } = await import("../src/server/ai/tasks/dm-tools");
 const { getAIProvider } = await import("../src/server/ai/provider");
+const { suggestForField, suggestPeoples } = await import("../src/server/ai/tasks/creator");
+const { addCorePeoples, addHomebrewPeoples } = await import("../src/server/services/peoples");
 const { setCampaignTime } = await import("../src/server/services/clock");
 const { durationToMinutes, DEFAULT_CALENDAR } = await import("../src/lib/calendar");
 
@@ -137,6 +139,47 @@ await step("foundation", async () => {
   const kinds: Record<string, number> = {};
   for (const i of batch?.items ?? []) kinds[i.kind] = (kinds[i.kind] ?? 0) + 1;
   console.log(`    ${res.fellBack ? "FELL BACK" : res.provider}: ${res.accepted} proposals ${JSON.stringify(kinds)}${res.dropped.length ? `, dropped ${res.dropped.length}` : ""}`);
+  return { ...res, items: batch?.items.map((i) => ({ kind: i.kind, payload: i.payload })) };
+});
+
+await step("creator_suggest", async () => {
+  const draft = { name: "Brassmoor", genre: "Steampunk", tone: "Smoke, soot and stubborn hope", magicLevel: "High", techLevel: "Industrial", description: "Free cities run on aether engines while the old guild-mages lose their grip.", profile: { magicSources: ["Machines and alchemy"], magicAttitude: "Licensed and regulated" } };
+  const out: Record<string, string[]> = {};
+  for (const f of ["conflict", "regions", "startingArea"] as const) out[f] = (await suggestForField(f, draft)).suggestions;
+  console.log(`    ${JSON.stringify(out).slice(0, 300)}`);
+  return out;
+});
+await step("creator_homebrew", async () => {
+  const r = await suggestPeoples({ draft: { name: "Brassmoor", genre: "Steampunk", tone: "Smoke and hope", magicLevel: "High", techLevel: "Industrial", description: "Free cities run on aether engines while the old guild-mages lose their grip.", races: ["Human (common)", "Gnome (common)", "Dwarf (common)"], classes: ["Fighter (common)", "Wizard (uncommon)"] }, existing: ["Human", "Gnome", "Dwarf", "Fighter", "Wizard"] });
+  console.log(`    ${r.provider}: ${r.items.map((i) => `${i.name} (${i.kind}, ${i.prevalence})`).join(", ")}`);
+  return r;
+});
+await step("foundation_profile", async () => {
+  const w = await createWorld(db, { ...actor, userId: user!.id }, {
+    name: "Brassmoor",
+    genre: "Steampunk",
+    tone: "Smoke, soot and stubborn hope",
+    magicLevel: "High",
+    techLevel: "Industrial",
+    description: "Free cities run on aether engines while the old guild-mages lose their grip.",
+    profile: { magicSources: ["Machines and alchemy", "Arcane study"], magicAttitude: "Licensed and regulated", worldShape: "Several continents", climates: ["Temperate", "Mountains", "Seas and coasts"], governments: ["City-states", "Merchant oligarchy"], nationCount: 3, factionCount: 4, religionStyle: "Dead or silent gods", historyHooks: ["A revolution", "A cataclysm"], themes: "Progress and what it destroys", conflict: "The Aether Guilds and the free cities race to control the last aether wells.", startingArea: "Cinderport, a smog-choked harbour city", detailStart: true, avoid: "Spiders" },
+  });
+  await addCorePeoples(db, w.id, actor, { races: { Human: "Common", Gnome: "Common", Dwarf: "Common", Halfling: "Uncommon", Elf: "Rare", Tiefling: "Uncommon" }, classes: { Fighter: "Common", Rogue: "Common", Wizard: "Uncommon", Cleric: "Rare" } });
+  await addHomebrewPeoples(db, w.id, actor, [
+    { kind: "class", name: "Artificer", prevalence: "Common", summary: "Engineers who bind magic into devices.", reason: "Industry.", fields: {} },
+    { kind: "race", name: "Clockwork Folk", prevalence: "Uncommon", summary: "Constructs with a spark of soul.", reason: "Industry.", fields: {} },
+  ]);
+  const res = await worldFoundation({ db, worldId: w.id, campaignId: null, userId: user!.id });
+  const batch = await getBatch(db, w.id, res.batchId);
+  const kinds: Record<string, number> = {};
+  for (const i of batch?.items ?? []) kinds[i.kind] = (kinds[i.kind] ?? 0) + 1;
+  const created = (batch?.items ?? []).filter((i) => i.kind === "create_entity").map((i) => i.payload as { entity: { type: string; name: string; fields: Record<string, unknown> } });
+  const withDemo = created.filter((e) => e.entity.fields?.demographics);
+  const npcs = created.filter((e) => e.entity.type === "npc");
+  console.log(`    ${res.fellBack ? "FELL BACK" : res.provider}: ${res.accepted} proposals ${JSON.stringify(kinds)}${res.dropped.length ? `, dropped ${res.dropped.length}` : ""}`);
+  console.log(`    nations: ${created.filter((e) => e.entity.type === "nation").length}, factions: ${created.filter((e) => e.entity.type === "faction").length}, deities: ${created.filter((e) => e.entity.type === "deity").length}, places with demographics: ${withDemo.length}`);
+  console.log(`    demographics e.g.: ${withDemo.slice(0, 2).map((e) => `${e.entity.name}: ${e.entity.fields.demographics}`).join(" | ")}`);
+  console.log(`    NPCs: ${npcs.map((n) => `${n.entity.name} (${n.entity.fields.species ?? "?"}${n.entity.fields.className ? `, ${n.entity.fields.className}` : ""})`).join(", ")}`);
   return { ...res, items: batch?.items.map((i) => ({ kind: i.kind, payload: i.payload })) };
 });
 
