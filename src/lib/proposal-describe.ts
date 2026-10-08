@@ -99,9 +99,9 @@ export function describeProposal(kind: ProposalKind, p: Record<string, any>, cal
         tone: "ember",
       };
     case "consequence_update":
-      return { title: `Consequence → ${p.status}`, detail: p.note, tone: "ember" };
+      return { title: p.label ? `${p.label} → ${p.status}` : `Consequence → ${p.status}`, detail: p.note, tone: "ember" };
     case "clue_update":
-      return { title: p.discovered ? "Clue discovered" : "Clue hidden again", tone: "arcane" };
+      return { title: p.discovered ? "Clue discovered" : "Clue hidden again", detail: p.label, tone: "arcane" };
     case "session_recap":
       return { title: "Session recap", detail: String(p.recap).slice(0, 600), tone: "brass" };
     case "party_inventory":

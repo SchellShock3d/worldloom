@@ -35,6 +35,7 @@ cp .env.example .env.local
 | `AI_PROVIDER` | auto | `anthropic` or `offline`. Auto picks Anthropic when a key is set. |
 | `AI_MODEL` | `claude-sonnet-5-5` | Model for generation, analysis and chat. |
 | `AI_FAST_MODEL` | `claude-haiku-4-5-20251001` | Model for "I need something now" quick generators. |
+| `AI_DEBUG_DIR` | unset | If set, every raw structured response from Claude is saved here as JSON, for prompt tuning. Leave unset in production. |
 | `UPLOAD_DIR` | `./.data/uploads` | Where uploaded maps, images and audio are stored. |
 | `INSECURE_COOKIES` | unset | Set to `true` only when serving a production build over plain HTTP (local testing). |
 
@@ -50,6 +51,7 @@ cp .env.example .env.local
 | `npm run db:migrate` | Apply migrations explicitly. |
 | `npm run db:generate` | Generate a migration after changing `src/server/db/schema.ts`. |
 | `npm run db:seed -- you@example.com [password]` | Add the demo world to an account (creating the account if you pass a password). |
+| `npx tsx scripts/live-ai-check.ts [out.json] [only=generate,session]` | Run every AI feature against a throwaway copy of the demo world with your real key, print a summary and save the full output. Uses a few dollars of API credit at most. |
 
 The demo world is never added to an account unless someone asks for it: from the home screen or with `db:seed`.
 

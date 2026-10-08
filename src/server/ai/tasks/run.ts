@@ -6,7 +6,8 @@
 import type { DB } from "@/server/db/client";
 import type { ProposalSource } from "@/server/db/schema";
 import { getAIProvider, type AIProvider } from "../provider";
-import { changeSetSchema, changeSetToDrafts, type ChangeSet } from "../changeset";
+import { changeSetToDrafts, changeSetWireSchema, changeSetWireSchemaFor, fromWire, type ChangeSet, type ChangeSetSection, type ChangeSetWire } from "../changeset";
+import { fillDefaults } from "../schema-utils";
 import { COPILOT_IDENTITY, CHANGESET_RULES, TIME_RULES } from "../prompts";
 import { createBatch } from "@/server/services/proposals";
 import type { ProposalDraft } from "@/lib/proposals";
@@ -33,6 +34,8 @@ export interface ChangeSetTaskInput {
   /** Proposals to put first (e.g. the clock advance). */
   leadingDrafts?: ProposalDraft[];
   maxTokens?: number;
+  /** The change-set sections this task uses, most important first. */
+  sections?: ChangeSetSection[];
 }
 
 export interface ChangeSetTaskResult {
@@ -51,13 +54,16 @@ export async function runChangeSetTask(t: ChangeSetTaskInput): Promise<ChangeSet
   let usedProvider: AIProvider["name"] = provider.name;
   if (provider.live) {
     try {
-      cs = await provider.structured({
+      const schema = t.sections ? changeSetWireSchemaFor(t.sections) : changeSetWireSchema;
+      const out = await provider.structured({
         name: "change_set",
-        schema: changeSetSchema,
+        schema,
+        strict: false,
         system: `${COPILOT_IDENTITY}\n\n${TIME_RULES}\n\n${CHANGESET_RULES}`,
         messages: [{ role: "user", content: `${t.context}\n\n---\n\n# Task\n${t.instructions}` }],
-        maxTokens: t.maxTokens ?? 12000,
+        maxTokens: t.maxTokens ?? 16000,
       });
+      cs = fromWire(fillDefaults(changeSetWireSchema, out) as ChangeSetWire);
     } catch (err) {
       console.error("[ai] live task failed, falling back to offline engine:", err);
       cs = await t.offline();

@@ -25,8 +25,9 @@ export function typeReference(keys?: string[]) {
 
 export const CHANGESET_RULES = `Output rules for proposals:
 - Everything you output is a PROPOSAL the DM will review; nothing becomes canon without approval.
-- Reference existing entities with {"id": "<uuid from context>", "ref": null, "name": "..."}.
-- Reference something you are creating in this same response with {"id": null, "ref": "<its ref>", "name": "..."}.
-- Leave arrays empty when they don't apply. Do not pad.
+- Reference existing entities with {"id": "<uuid from context>", "ref": "", "name": "..."}.
+- Reference something you are creating in this same response with {"id": "", "ref": "<its ref>", "name": "..."}.
+- For an optional reference with nothing to point at, use {"id": "", "ref": "", "name": ""}. Empty strings mean "none" or "keep as is"; "unchanged" leaves a status alone.
+- Leave arrays empty when they don't apply. Do not pad, and never output a placeholder or stand-in: if something has no proper place in these sections, leave it out and mention it in the summary.
 - Keep each rationale to one short sentence explaining why this follows from the records.
 - Put secrets and twists inside a ':::dm' block in bodies so they stay hidden from players.`;

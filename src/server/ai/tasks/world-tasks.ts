@@ -31,6 +31,7 @@ export async function generateContent(b: Base & { request: string; type?: string
   return runChangeSetTask({
     ...b,
     source: "generate",
+    sections: ["newEntities", "relationships", "events", "rumours", "facts", "entityUpdates", "threadUpdates", "consequences"],
     title: truncateTitle(b.request),
     context: ctx.text,
     now: ctx.bundle.now,
@@ -65,6 +66,7 @@ export async function processSessionNotes(b: Base & { sessionId: string }): Prom
   return runChangeSetTask({
     ...b,
     source: "session",
+    sections: ["recap", "events", "campaignStates", "questUpdates", "consequences", "consequenceUpdates", "clueUpdates", "facts", "newEntities", "relationships", "entityUpdates", "threadUpdates", "rumours", "metricChanges", "inventoryAdd", "inventoryRemove"],
     title: `Session ${session.number}${session.title ? `: ${session.title}` : ""} — proposed updates`,
     sessionId: session.id,
     context: ctx.text,
@@ -81,10 +83,10 @@ Produce:
 - recap: a readable recap of the session (markdown, past tense, 1–4 short paragraphs or bullets) suitable to read aloud next time.
 - events: notable things that happened (kind "campaign", offsetDays 0 or small negative), with involved entities and location.
 - campaignStates: NPC/faction status changes in THIS campaign (dead, missing, imprisoned…), location changes, reputation changes toward the party, and entities the players discovered.
-- relationships: new relationships revealed or formed.
+- relationships: new relationships revealed or formed between two specific entities. The party as a whole is not an entity: record how someone feels about the party in campaignStates (attitude, reputation), never as a relationship to one party member.
 - questUpdates: quests started, progressed (objectives done/failed/new), completed or failed.
 - metricChanges: faction influence or place safety shifts caused by the party.
-- facts: new knowledge — what specific NPCs now know (holder = that NPC), what the party learned (holder = a PC if clear), or world truths revealed.
+- facts: new knowledge — what specific NPCs now know (holder = that NPC), what a single character learned alone (holder = that PC, only when the notes say so), or world truths revealed. Something the whole party learned is not a fact for one PC: mark the entity discovered in campaignStates instead.
 - consequences: promises NPCs made (kind "promise", with dueInDays), reactions the world owes the party (kind "reaction"), and likely consequences of player decisions (kind "consequence").
 - consequenceUpdates: existing pending consequences ({consequence:<id>} in context) that resolved or triggered.
 - clueUpdates: existing clues ({clue:<id>} in context) the players found.
@@ -122,6 +124,7 @@ export async function advanceWorld(b: Base & { minutes: number; note?: string })
   return runChangeSetTask({
     ...b,
     source: "advance",
+    sections: ["threadUpdates", "events", "metricChanges", "entityUpdates", "consequenceUpdates", "consequences", "rumours", "facts", "campaignStates", "questUpdates", "relationships", "newEntities"],
     title: `Advance world: ${span}`,
     context: ctx.text,
     now: fromAt,
@@ -163,6 +166,7 @@ export async function suggestConsequences(b: Base & { action: string; focusIds?:
   return runChangeSetTask({
     ...b,
     source: "consequences",
+    sections: ["consequences", "campaignStates", "metricChanges", "threadUpdates", "rumours", "events", "facts", "entityUpdates", "relationships"],
     title: `Consequences: ${truncateTitle(b.action)}`,
     context: ctx.text,
     now: ctx.bundle.now,
@@ -214,11 +218,12 @@ export async function loreAction(b: Base & { entityId: string; action: LoreActio
     summarize: `Write a crisp 1–2 sentence summary of ${e.name} {id:${e.id}} from everything known. Use one entityUpdates item with summary only.`,
     connect: `Suggest meaningful connections between ${e.name} {id:${e.id}} and EXISTING entities in the context (3–8 relationships). Each needs a specific description. Do not create new entities.`,
     motivations: `Generate motivations, goals and fears for ${e.name} {id:${e.id}} that fit their situation, relationships and the active world threads. Use one entityUpdates item with appendBody containing a "## Motivations" section, and up to 2 facts about what they know or want.`,
-    secrets: `Invent 1–3 secrets for ${e.name} {id:${e.id}} that connect to existing threads, factions or mysteries. Use entityUpdates.appendBody inside a :::dm block, and facts (world truths, holder null) for the secrets.`,
+    secrets: `Invent 1–3 secrets for ${e.name} {id:${e.id}} that connect to existing threads, factions or mysteries. Use entityUpdates.appendBody inside a :::dm block, and facts (world truths, with an empty holder) for the secrets.`,
   };
   return runChangeSetTask({
     ...b,
     source: "generate",
+    sections: ["entityUpdates", "relationships", "facts", "newEntities"],
     title: `${b.action[0]!.toUpperCase()}${b.action.slice(1)}: ${e.name}`,
     context: `${ctx.text}\n\n# Focus\n${await entityCard(b.db, b.worldId, e, { campaignId: b.campaignId, bodyChars: 3000, relLimit: 20 })}`,
     now: ctx.bundle.now,
@@ -266,11 +271,12 @@ export async function worldFoundation(b: Base & { answers: { themes: string; con
     ...b,
     campaignId: null,
     source: "onboarding",
+    sections: ["newEntities", "relationships", "events", "rumours", "facts"],
     title: `Foundation for ${w.name}`,
     context: ctx,
     now: bundle.now,
     calendar: bundle.calendar,
-    maxTokens: 16000,
+    maxTokens: 32000,
     instructions: `Build a PROPOSED foundation for this new world from the DM's answers:
 - Themes: ${b.answers.themes || "(none given)"}
 - Central conflict: ${b.answers.conflict || "(none given)"}
@@ -278,7 +284,7 @@ export async function worldFoundation(b: Base & { answers: { themes: string; con
 - Regions / geography wanted: ${b.answers.regions || "(none given)"}
 - Other notes: ${b.answers.notes || "(none)"}
 
-Create, as newEntities: a short world-overview lore page (type lore, importance 2), 1 continent, 3–5 major regions (located in the continent), 2–4 starting nations (located in regions), 2–3 religions each with a deity, 3–5 major factions with clear goals, and 2–3 world_thread entities representing the ongoing conflicts. Add 4–6 historical events (events with yearsAgo) that explain how the world got here. Connect everything with relationships (nations at war/allied, factions controlling regions, deities worshipped by religions, factions driving threads). Keep names original and evocative; avoid famous published settings.
+Create, as newEntities: a short world-overview lore page (type lore, importance 2), 1 continent, 3–5 major regions (located in the continent), 2–4 starting nations (located in regions), 2–3 religions each with a deity, 3–5 major factions with clear goals, and 2–3 world_thread entities representing the ongoing conflicts. Add 4–6 historical events (events with yearsAgo) that explain how the world got here. Connect everything with relationships (nations at war/allied, factions controlling regions, deities worshipped by religions, factions driving threads). Keep names original and evocative; avoid famous published settings. Keep every body to one or two short paragraphs: this is a foundation the DM will expand, not an encyclopedia.
 
 Entity types and fields:
 ${typeReference(["lore", "continent", "region", "nation", "religion", "deity", "faction", "world_thread", "settlement"])}`,

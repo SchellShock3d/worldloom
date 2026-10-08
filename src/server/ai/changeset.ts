@@ -6,13 +6,14 @@
  * reference can never reach the database.
  */
 import { z } from "zod";
-import { inArray, and, eq } from "drizzle-orm";
+import { inArray, and, eq, ne, or, sql } from "drizzle-orm";
 import type { DB } from "@/server/db/client";
 import { entities, consequences, clues, relationships } from "@/server/db/schema";
 import { getEntityType, ENTITY_TYPE_MAP } from "@/lib/entity-types";
 import { durationToMinutes, type CalendarDefinition } from "@/lib/calendar";
 import type { ProposalDraft } from "@/lib/proposals";
 import type { EntityRefValue } from "@/lib/proposals";
+import { normalizeDmBlocks } from "@/lib/mentions";
 
 export const aiRef = z.object({
   id: z.string().nullable().describe("UUID of an existing entity from the context ({id:...}), or null"),
@@ -164,6 +165,181 @@ export const changeSetSchema = z.object({
 });
 export type ChangeSet = z.infer<typeof changeSetSchema>;
 
+// ---------------------------------------------------------------------------
+// Wire format for the model. Strict structured output caps the number of
+// nullable/union-typed parameters, so the model gets a union-free mirror of
+// the change set: empty strings, zero and "unchanged" mean "none". fromWire()
+// turns it back into the ChangeSet the rest of the pipeline (and the offline
+// engine) uses.
+// ---------------------------------------------------------------------------
+
+const wRef = z.object({
+  id: z.string().describe("UUID of an existing entity from the context ({id:...}), or empty"),
+  ref: z.string().describe("Temporary key of an entity created in this same response, or empty"),
+  name: z.string().describe("Display name, for the DM"),
+});
+const optRef = (what: string) => wRef.describe(`${what}. Use empty id, ref and name when there is none.`);
+
+const wireChangeSet = z.object({
+  summary: z.string().describe("Two or three sentences for the DM describing the proposals"),
+  recap: z.string().describe("Session recap in markdown, or empty"),
+  newEntities: z.array(
+    z.object({
+      ref: z.string().describe("Unique temporary key, e.g. 'npc-1'"),
+      type: aiNewEntity.shape.type,
+      name: z.string(),
+      summary: z.string().describe("One or two sentences"),
+      body: aiNewEntity.shape.body,
+      status: z.string().describe("Status, or empty"),
+      location: optRef("Where it is located"),
+      fields: aiNewEntity.shape.fields,
+      tags: z.array(z.string()),
+      aliases: z.array(z.string()),
+      visibility: z.enum(visibilityValues),
+      importance: z.number().describe("0 normal, 1 important, 2 major"),
+      rationale: z.string(),
+    }),
+  ),
+  relationships: z.array(z.object({ source: wRef, target: wRef, type: aiRelationship.shape.type, description: z.string(), rationale: z.string() })),
+  entityUpdates: z.array(
+    z.object({
+      target: wRef,
+      summary: z.string().describe("New summary, or empty to keep it"),
+      appendBody: z.string().describe("Markdown to append to the article, or empty"),
+      status: z.string().describe("New status, or empty to keep it"),
+      location: optRef("New location"),
+      rationale: z.string(),
+    }),
+  ),
+  events: z.array(
+    z.object({
+      ref: z.string().describe("Temporary key so rumours can point at this event, or empty"),
+      title: z.string(),
+      summary: z.string(),
+      kind: aiEvent.shape.kind,
+      offsetDays: aiEvent.shape.offsetDays,
+      yearsAgo: z.number().describe("For deep history only: years before the current date (1 or more). 0 for anything recent."),
+      location: optRef("Where it happens"),
+      involved: z.array(wRef),
+      visibility: z.enum(visibilityValues),
+      rationale: z.string(),
+    }),
+  ),
+  threadUpdates: z.array(
+    z.object({
+      thread: wRef,
+      progressDelta: z.number().describe("-100..100"),
+      status: z.enum(["unchanged", "dormant", "active", "escalating", "resolved", "failed", "paused"]),
+      nextMilestone: z.string().describe("Next milestone, or empty to keep it"),
+      rationale: z.string(),
+    }),
+  ),
+  rumours: z.array(
+    z.object({
+      title: z.string(),
+      claim: z.string().describe("What people say"),
+      truth: z.string().describe("What is actually true (DM only)"),
+      accuracy: z.number().describe("0-100"),
+      distortion: z.string(),
+      originEvent: optRef("The event it grew from"),
+      circulatesIn: z.array(wRef),
+      spreadBy: z.array(wRef),
+      rationale: z.string(),
+    }),
+  ),
+  facts: z.array(
+    z.object({
+      holder: optRef("Who knows or believes this; empty for an objective world truth"),
+      subject: optRef("Who or what it is about"),
+      statement: z.string(),
+      truthStatus: aiFact.shape.truthStatus,
+      confidence: z.number().describe("0-100"),
+      rationale: z.string(),
+    }),
+  ),
+  questUpdates: z.array(
+    z.object({
+      quest: wRef,
+      status: z.enum(["unchanged", "unknown", "available", "active", "completed", "failed", "abandoned", "hidden"]),
+      completedObjectives: z.array(z.string()),
+      failedObjectives: z.array(z.string()),
+      newObjectives: z.array(z.string()),
+      rationale: z.string(),
+    }),
+  ),
+  campaignStates: z.array(
+    z.object({
+      entity: wRef,
+      status: z.string().describe("New status in this campaign (e.g. dead, missing, imprisoned), or empty"),
+      location: optRef("New location in this campaign"),
+      reputationDelta: z.number().describe("Change in attitude toward the party, -100..100; 0 for no change"),
+      attitude: z.string().describe("One word for their attitude, or empty"),
+      playersDiscovered: z.boolean().describe("The players learned about this entity"),
+      rationale: z.string(),
+    }),
+  ),
+  metricChanges: z.array(aiMetricChange.extend({ entity: wRef })),
+  consequences: z.array(
+    z.object({
+      kind: aiConsequence.shape.kind,
+      title: z.string(),
+      description: z.string(),
+      cause: z.string(),
+      actor: optRef("Who acts or owes"),
+      severity: z.number().describe("1-5"),
+      dueInDays: z.number().describe("Days until it comes due; 0 if it has no due date"),
+      rationale: z.string(),
+    }),
+  ),
+  consequenceUpdates: z.array(aiConsequenceUpdate),
+  clueUpdates: z.array(aiClueUpdate),
+  inventoryAdd: z.array(z.string()),
+  inventoryRemove: z.array(z.string()),
+});
+export const changeSetWireSchema = wireChangeSet;
+export type ChangeSetWire = z.infer<typeof wireChangeSet>;
+export type ChangeSetSection = Exclude<keyof ChangeSetWire, "summary">;
+
+/**
+ * The wire schema narrowed to the sections a task actually uses, in priority order, with the
+ * summary last. Models fill a long schema top to bottom and can stop early, and they write a
+ * better summary after the proposals than before them.
+ */
+export function changeSetWireSchemaFor(sections: ChangeSetSection[]) {
+  const shape = wireChangeSet.shape;
+  const picked: Record<string, z.ZodType> = {};
+  for (const k of sections) picked[k] = shape[k];
+  picked.summary = shape.summary;
+  return z.object(picked);
+}
+
+const ref = (x: z.infer<typeof wRef>): AiRef => ({ id: x.id.trim() || null, ref: x.ref.trim() || null, name: x.name });
+// A name alone still counts: changeSetToDrafts resolves it against the world's entries.
+const optional = (x: z.infer<typeof wRef>): AiRef | null => (x.id.trim() || x.ref.trim() || x.name.trim() ? ref(x) : null);
+const text = (x: string) => (x.trim() ? x : null);
+
+export function fromWire(w: ChangeSetWire): ChangeSet {
+  return {
+    summary: w.summary,
+    recap: text(w.recap),
+    newEntities: w.newEntities.map((e) => ({ ...e, status: text(e.status), location: optional(e.location) })),
+    relationships: w.relationships.map((r) => ({ ...r, source: ref(r.source), target: ref(r.target) })),
+    entityUpdates: w.entityUpdates.map((u) => ({ target: ref(u.target), summary: text(u.summary), appendBody: text(u.appendBody), status: text(u.status), location: optional(u.location), rationale: u.rationale })),
+    events: w.events.map((e) => ({ ...e, ref: text(e.ref), yearsAgo: e.yearsAgo >= 1 ? e.yearsAgo : null, location: optional(e.location), involved: e.involved.map(ref) })),
+    threadUpdates: w.threadUpdates.map((t) => ({ ...t, thread: ref(t.thread), status: t.status === "unchanged" ? null : t.status, nextMilestone: text(t.nextMilestone) })),
+    rumours: w.rumours.map((r) => ({ ...r, originEvent: optional(r.originEvent), circulatesIn: r.circulatesIn.map(ref), spreadBy: r.spreadBy.map(ref) })),
+    facts: w.facts.map((f) => ({ ...f, holder: optional(f.holder), subject: optional(f.subject) })),
+    questUpdates: w.questUpdates.map((q) => ({ ...q, quest: ref(q.quest), status: q.status === "unchanged" ? null : q.status })),
+    campaignStates: w.campaignStates.map((c) => ({ ...c, entity: ref(c.entity), status: text(c.status), location: optional(c.location), reputationDelta: c.reputationDelta === 0 ? null : c.reputationDelta, attitude: text(c.attitude) })),
+    metricChanges: w.metricChanges.map((m) => ({ ...m, entity: ref(m.entity) })),
+    consequences: w.consequences.map((c) => ({ ...c, actor: optional(c.actor), dueInDays: c.dueInDays > 0 ? c.dueInDays : null })),
+    consequenceUpdates: w.consequenceUpdates,
+    clueUpdates: w.clueUpdates,
+    inventoryAdd: w.inventoryAdd,
+    inventoryRemove: w.inventoryRemove,
+  };
+}
+
 export function emptyChangeSet(summary = ""): ChangeSet {
   return {
     summary,
@@ -206,8 +382,11 @@ export async function changeSetToDrafts(db: DB, cs: ChangeSet, ctx: ConvertConte
   const dropped: string[] = [];
   // Collect referenced ids and check them in one query.
   const ids = new Set<string>();
+  const seen: AiRef[] = [];
   const collect = (r: AiRef | null | undefined) => {
-    if (r?.id && UUID.test(r.id)) ids.add(r.id.toLowerCase());
+    if (!r) return;
+    seen.push(r);
+    if (r.id && UUID.test(r.id)) ids.add(r.id.toLowerCase());
   };
   cs.newEntities.forEach((e) => collect(e.location));
   cs.relationships.forEach((r) => (collect(r.source), collect(r.target)));
@@ -228,11 +407,46 @@ export async function changeSetToDrafts(db: DB, cs: ChangeSet, ctx: ConvertConte
   const refs = new Set(cs.newEntities.map((e) => e.ref));
   cs.events.forEach((e) => e.ref && refs.add(e.ref));
 
+  // Models sometimes name an entity without its id (or with a mangled one).
+  // Resolve those by exact name, then alias, but only when the match is unique.
+  const norm = (s: string) => s.trim().replace(/^@/, "").toLowerCase();
+  const byName = new Map<string, EntityRefValue>();
+  const resolvedDirectly = (x: AiRef) => (x.id && UUID.test(x.id) && known.has(x.id.toLowerCase())) || (x.ref && refs.has(x.ref));
+  const names = [...new Set(seen.filter((x) => !resolvedDirectly(x) && x.name?.trim()).map((x) => norm(x.name!)))].filter(Boolean);
+  if (names.length) {
+    const listSql = sql.join(names.map((n) => sql`${n}`), sql`, `);
+    const rows = await db
+      .select({ id: entities.id, type: entities.type, name: entities.name, aliases: entities.aliases })
+      .from(entities)
+      .where(
+        and(
+          eq(entities.worldId, ctx.worldId),
+          ne(entities.canonStatus, "archived"),
+          or(sql`lower(${entities.name}) in (${listSql})`, sql`exists (select 1 from unnest(${entities.aliases}) as a(v) where lower(a.v) in (${listSql}))`),
+        ),
+      );
+    for (const n of names) {
+      const exact = rows.filter((row) => row.name.toLowerCase() === n);
+      const alias = exact.length ? [] : rows.filter((row) => row.aliases.some((a) => a.toLowerCase() === n));
+      const hit = exact.length === 1 ? exact[0] : alias.length === 1 ? alias[0] : undefined;
+      if (hit) {
+        known.set(hit.id, { type: hit.type, name: hit.name });
+        byName.set(n, { id: hit.id, name: hit.name });
+      }
+    }
+    // Then new entities in this same batch, referred to by name instead of ref.
+    for (const e of cs.newEntities) {
+      const n = norm(e.name);
+      if (names.includes(n) && !byName.has(n) && cs.newEntities.filter((o) => norm(o.name) === n).length === 1) byName.set(n, { ref: e.ref, name: e.name });
+    }
+  }
+
   /** Resolve an AI ref; returns undefined if invalid. */
   const r = (x: AiRef | null | undefined): EntityRefValue | null | undefined => {
     if (!x) return null;
     if (x.id && UUID.test(x.id) && known.has(x.id.toLowerCase())) return { id: x.id.toLowerCase(), name: known.get(x.id.toLowerCase())!.name };
     if (x.ref && refs.has(x.ref)) return { ref: x.ref, name: x.name };
+    if (x.name && byName.has(norm(x.name))) return byName.get(norm(x.name));
     return undefined;
   };
   const must = (x: AiRef | null | undefined, what: string) => {
@@ -265,7 +479,7 @@ export async function changeSetToDrafts(db: DB, cs: ChangeSet, ctx: ConvertConte
           type: typeKey,
           name: e.name,
           summary: e.summary,
-          body: e.body,
+          body: normalizeDmBlocks(e.body),
           status: e.status && def.statuses?.includes(e.status) ? e.status : null,
           // Location refs to other new entities can't be stored on create; they're linked after approval via a follow-up update.
           locationId: loc?.id ?? null,
@@ -319,7 +533,7 @@ export async function changeSetToDrafts(db: DB, cs: ChangeSet, ctx: ConvertConte
     if (!target) continue;
     const payload: Record<string, unknown> = { target };
     if (u.summary) payload.summary = u.summary;
-    if (u.appendBody) payload.appendBody = u.appendBody;
+    if (u.appendBody) payload.appendBody = normalizeDmBlocks(u.appendBody);
     if (u.status) payload.status = u.status;
     if (u.location) {
       const l = optional(u.location);
@@ -430,22 +644,22 @@ export async function changeSetToDrafts(db: DB, cs: ChangeSet, ctx: ConvertConte
 
   if (cs.consequenceUpdates.length) {
     const cids = cs.consequenceUpdates.map((c) => c.consequenceId).filter((x) => UUID.test(x));
-    const valid = cids.length ? new Set((await db.select({ id: consequences.id }).from(consequences).where(and(eq(consequences.worldId, ctx.worldId), inArray(consequences.id, cids)))).map((x) => x.id)) : new Set<string>();
+    const valid = new Map((cids.length ? await db.select({ id: consequences.id, title: consequences.title }).from(consequences).where(and(eq(consequences.worldId, ctx.worldId), inArray(consequences.id, cids))) : []).map((x) => [x.id, x.title]));
     for (const c of cs.consequenceUpdates) {
       if (!valid.has(c.consequenceId)) {
         dropped.push("Unknown consequence id");
         continue;
       }
-      drafts.push({ kind: "consequence_update", rationale: c.rationale, payload: { consequenceId: c.consequenceId, status: c.status } });
+      drafts.push({ kind: "consequence_update", rationale: c.rationale, payload: { consequenceId: c.consequenceId, status: c.status, label: valid.get(c.consequenceId)!.slice(0, 300) } });
     }
   }
 
   if (cs.clueUpdates.length) {
     const cids = cs.clueUpdates.map((c) => c.clueId).filter((x) => UUID.test(x));
-    const valid = cids.length ? new Set((await db.select({ id: clues.id }).from(clues).where(and(eq(clues.worldId, ctx.worldId), inArray(clues.id, cids)))).map((x) => x.id)) : new Set<string>();
+    const valid = new Map((cids.length ? await db.select({ id: clues.id, description: clues.description }).from(clues).where(and(eq(clues.worldId, ctx.worldId), inArray(clues.id, cids))) : []).map((x) => [x.id, x.description]));
     for (const c of cs.clueUpdates) {
       if (!valid.has(c.clueId)) continue;
-      drafts.push({ kind: "clue_update", rationale: c.rationale, payload: { clueId: c.clueId, discovered: c.discovered } });
+      drafts.push({ kind: "clue_update", rationale: c.rationale, payload: { clueId: c.clueId, discovered: c.discovered, label: valid.get(c.clueId)!.slice(0, 300) } });
     }
   }
 

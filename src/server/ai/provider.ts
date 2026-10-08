@@ -25,8 +25,12 @@ export interface AIProvider {
   readonly model: string;
   text(req: AIRequest): Promise<string>;
   stream(req: AIRequest): AsyncIterable<string>;
-  /** Structured output validated against the given schema. */
-  structured<T>(req: AIRequest & { schema: z.ZodType<T>; name: string }): Promise<T>;
+  /**
+   * Output validated against the schema. `strict` (default) uses constrained decoding, which caps
+   * schema size; `strict: false` asks for a single tool call, then validates it and retries with
+   * the errors (up to three attempts), for large schemas such as the change set.
+   */
+  structured<T>(req: AIRequest & { schema: z.ZodType<T>; name: string; strict?: boolean }): Promise<T>;
 }
 
 export class AIUnavailableError extends Error {
@@ -78,7 +82,7 @@ export function describeAIError(err: unknown): string {
   if (e?.status === 429 || type === "rate_limit_error") return "Anthropic's rate limit was reached. Try again in a minute.";
   if (e?.status === 529 || type === "overloaded_error") return "Claude is overloaded right now. Try again shortly.";
   if (e?.name === "APIConnectionError" || e?.name === "APIConnectionTimeoutError") return "The server couldn't reach the Anthropic API.";
-  const msg = (e?.message ?? "").replace(/\s+/g, " ").trim();
+  const msg = (e?.error?.error?.message ?? e?.message ?? "").replace(/\s+/g, " ").trim();
   return msg ? msg.slice(0, 200) : "The AI model failed.";
 }
 

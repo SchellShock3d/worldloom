@@ -1,10 +1,12 @@
 /** Prepare Next Session, "I need something now", and AI continuity review. */
-import { and, eq, ilike, inArray, isNull, or } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, isNull, or } from "drizzle-orm";
 import { z } from "zod";
 import type { DB } from "@/server/db/client";
-import { entities, randomTableEntries, randomTables } from "@/server/db/schema";
-import { formatDate, resolve, timeOfDay } from "@/lib/calendar";
-import { mentionToken } from "@/lib/mentions";
+import { entities, proposalBatches, proposals, randomTableEntries, randomTables } from "@/server/db/schema";
+import { formatDate, resolve, timeOfDay, type CalendarDefinition } from "@/lib/calendar";
+import { describeProposal } from "@/lib/proposal-describe";
+import type { ProposalKind } from "@/lib/proposals";
+import { mentionToken, normalizeDmBlocks } from "@/lib/mentions";
 import { truncate } from "@/lib/utils";
 import { getEntityType } from "@/lib/entity-types";
 import { getAIProvider } from "../provider";
@@ -39,6 +41,7 @@ export async function prepareSession(db: DB, opts: { worldId: string; campaignId
 
   if (provider.live) {
     const ctx = await buildDmContext(db, { worldId: opts.worldId, campaignId: camp.id, query: opts.focus ?? "", budgetChars: 34000, maxEntities: 20 });
+    const pending = await pendingChangesText(db, opts.worldId, camp.id, bundle.calendar);
     try {
       const out = await provider.structured({
         name: "briefing",
@@ -48,7 +51,9 @@ export async function prepareSession(db: DB, opts: { worldId: string; campaignId
         messages: [
           {
             role: "user",
-            content: `${ctx.text}\n\n# Forgotten threads\n${forgotten.map((f) => `- ${f.title}. ${f.detail}`).join("\n") || "(none)"}\n\n# Unfinished business\n${ub.map((u) => `- ${u.name}: ${u.reasons.join("; ")}`).join("\n") || "(none)"}\n\n---\n# Task\nWrite a DM briefing to prepare the NEXT session${opts.focus ? ` (DM focus: ${opts.focus})` : ""}. Sections (markdown ## headings): Current situation (location, date, party status), Relevant NPCs, Active quests, Unresolved mysteries, Unresolved promises, Nearby world threads, Faction activity, Potential consequences, Likely player directions, Useful encounters, Potential scenes, Relevant lore, Potential revelations. Be specific and grounded in the records; bullets are fine. When naming an existing entity, link it as @[Name](entity:<uuid>). Also return 2–5 ready-to-use scenes and 1–3 encounters.`,
+            content: `${ctx.text}\n\n# Forgotten threads\n${forgotten.map((f) => `- ${f.title}. ${f.detail}`).join("\n") || "(none)"}\n\n# Unfinished business\n${ub.map((u) => `- ${u.name}: ${u.reasons.join("; ")}`).join("\n") || "(none)"}${
+              pending ? `\n\n# Waiting for the DM's approval\n${pending}` : ""
+            }\n\n---\n# Task\nWrite a DM briefing to prepare the NEXT session${opts.focus ? ` (DM focus: ${opts.focus})` : ""}. Sections (markdown ## headings): Current situation (location, date, party status), Relevant NPCs, Active quests, Unresolved mysteries, Unresolved promises, Nearby world threads, Faction activity, Potential consequences, Likely player directions, Useful encounters, Potential scenes, Relevant lore, Potential revelations. Be specific and grounded in the records; bullets are fine. When naming an existing entity whose id appears above, link it as @[Name](entity:<uuid>); otherwise just write the name. Never mention ids, records or context in the briefing itself. If session notes haven't been processed yet, say which changes are waiting rather than calling the records wrong. Also return 2–5 ready-to-use scenes and 1–3 encounters.`,
           },
         ],
       });
@@ -196,9 +201,9 @@ export async function needSomethingNow(db: DB, opts: { worldId: string; campaign
         fast: true,
         maxTokens: 1500,
         system: `${COPILOT_IDENTITY}\nYou're generating something the DM needs RIGHT NOW at the table. Be quick, concrete and usable immediately. Fit the current scene, location and world. In "text", anything the players must not learn (secrets, hidden motives, whether a rumour is true) goes inside a DM block: a line ":::dm", the secret lines, then a line ":::".`,
-        messages: [{ role: "user", content: `${ctx.text}\n\n# Task\nGive me one ${opts.kind}${opts.hint ? ` (${opts.hint})` : ""}. Type reference: ${typeReference(["npc", "shop", "tavern", "location", "item", "magic_item"])}` }],
+        messages: [{ role: "user", content: `${ctx.text}\n\n# Task\nGive me one ${opts.kind}${opts.hint ? ` (${opts.hint})` : ""}. Make it new: not a person, place or thing already in the records above (though it can be connected to them). Title it with its own name. Type reference: ${typeReference(["npc", "shop", "tavern", "location", "item", "magic_item"])}` }],
       });
-      return { kind: opts.kind, title: out.title, text: out.text, entityType: out.entityType && getEntityType(out.entityType).description !== "Unknown type" ? out.entityType : null, summary: out.summary, fields: Object.fromEntries(out.fields.map((f) => [f.key, f.value])), locationId, provider: provider.name };
+      return { kind: opts.kind, title: out.title, text: normalizeDmBlocks(out.text), entityType: out.entityType && getEntityType(out.entityType).description !== "Unknown type" ? out.entityType : null, summary: out.summary, fields: Object.fromEntries(out.fields.map((f) => [f.key, f.value])), locationId, provider: provider.name };
     } catch (err) {
       console.error("[ai] quick generation failed, using offline", err);
     }
@@ -277,6 +282,44 @@ async function offlineEmergency(db: DB, opts: { worldId: string; campaignId: str
 // Continuity (AI review on top of deterministic checks)
 // ---------------------------------------------------------------------------
 
+/**
+ * Pending proposals, briefly, so a review doesn't flag what's already queued for approval.
+ * Changes to existing records come first, since those are what a reviewer would call stale.
+ */
+const PENDING_ORDER = ["consequence_update", "clue_update", "quest_update", "campaign_state", "party_inventory", "update_entity", "update_thread", "advance_clock", "session_recap"];
+export async function pendingChangesText(db: DB, worldId: string, campaignId: string | null, cal: CalendarDefinition, budget = 9000) {
+  const batches = await db
+    .select({ id: proposalBatches.id, title: proposalBatches.title })
+    .from(proposalBatches)
+    .where(and(eq(proposalBatches.worldId, worldId), inArray(proposalBatches.status, ["pending", "partial"]), campaignId ? or(eq(proposalBatches.campaignId, campaignId), isNull(proposalBatches.campaignId)) : isNull(proposalBatches.campaignId)))
+    .orderBy(desc(proposalBatches.createdAt))
+    .limit(4);
+  if (!batches.length) return "";
+  const items = await db
+    .select({ batchId: proposals.batchId, kind: proposals.kind, payload: proposals.payload, position: proposals.position })
+    .from(proposals)
+    .where(and(inArray(proposals.batchId, batches.map((b) => b.id)), eq(proposals.status, "pending")));
+  const rank = (k: string) => (PENDING_ORDER.includes(k) ? PENDING_ORDER.indexOf(k) : PENDING_ORDER.length);
+  const flat = (x: string) => x.replace(/\s+/g, " ").trim();
+  let used = 0;
+  const out: string[] = [];
+  for (const b of batches) {
+    const mine = items.filter((i) => i.batchId === b.id).sort((x, y) => rank(x.kind) - rank(y.kind) || x.position - y.position);
+    if (!mine.length) continue;
+    const lines: string[] = [];
+    for (const i of mine) {
+      const d = describeProposal(i.kind as ProposalKind, i.payload, cal);
+      const line = `  - ${truncate(flat([d.title, d.detail ? truncate(d.detail, 120) : "", ...(d.bullets ?? []).slice(0, 3)].filter(Boolean).join("; ")), 200)}`;
+      if (used + line.length > budget) break;
+      used += line.length;
+      lines.push(line);
+    }
+    if (lines.length < mine.length) lines.push(`  - …and ${mine.length - lines.length} more`);
+    out.push(`- ${b.title}\n${lines.join("\n")}`);
+  }
+  return out.join("\n");
+}
+
 const continuitySchema = z.object({
   issues: z.array(z.object({ title: z.string(), detail: z.string(), severity: z.enum(["info", "warn", "high"]), entities: z.array(aiRef) })),
 });
@@ -288,6 +331,7 @@ export async function runContinuity(db: DB, opts: { worldId: string; campaignId:
   if (!opts.deep || !provider.live) return { issues, provider: "offline" };
   try {
     const ctx = await buildDmContext(db, { worldId: opts.worldId, campaignId: opts.campaignId, budgetChars: 34000, maxEntities: 24 });
+    const pending = await pendingChangesText(db, opts.worldId, opts.campaignId, bundle.calendar);
     const out = await provider.structured({
       name: "continuity",
       schema: continuitySchema,
@@ -296,7 +340,9 @@ export async function runContinuity(db: DB, opts: { worldId: string; campaignId:
       messages: [
         {
           role: "user",
-          content: `${ctx.text}\n\n# Already detected\n${issues.map((i) => `- ${i.title}`).join("\n") || "(none)"}\n\n# Task\nReview these records for continuity problems not already detected: dead characters appearing later, conflicting dates, impossible travel times, duplicate entities, contradictory lore, NPCs knowing things they shouldn't, wrong relationships, timeline conflicts, promised events never resolved. Only report genuine, specific problems; it's fine to return none. Do not change anything.`,
+          content: `${ctx.text}\n\n# Already detected\n${issues.map((i) => `- ${i.title}`).join("\n") || "(none)"}${
+            pending ? `\n\n# Waiting for the DM's approval\nThese changes are already proposed. Don't report records as stale or missing when a change below covers them.\n${pending}` : ""
+          }\n\n# Task\nReview these records for continuity problems not already detected: dead characters appearing later, conflicting dates, impossible travel times, duplicate entities, contradictory lore, NPCs knowing things they shouldn't, wrong relationships, timeline conflicts, promised events never resolved. Only report genuine, specific problems; it's fine to return none. Do not change anything. (The player portal already hides DM-only and secret entries, DM blocks, and links to anything players haven't discovered, so a public entry linked to a secret one is not a leak.)`,
         },
       ],
     });

@@ -86,8 +86,21 @@ export interface MarkdownSegment {
   text: string;
 }
 
+/**
+ * Tidy loosely written DM blocks into the canonical form: `:::dm` and `:::` each on their own
+ * line. Handles blocks written inline (`:::dm secret :::`) and an opening with no close, which
+ * hides the rest of the text. Fails closed: anything after a stray `:::dm` stays DM-only.
+ */
+export function normalizeDmBlocks(md: string): string {
+  if (!md.includes(":::dm")) return md;
+  let out = md.replace(/[ \t]*:::dm[ \t]*\n?([\s\S]*?)\n?[ \t]*:::(?!dm)[ \t]*/g, (_m, inner: string) => `\n\n:::dm\n${inner.trim()}\n:::\n\n`);
+  out = out.replace(/[ \t]*:::dm(?![ \t]*\n[\s\S]*?\n:::)[ \t]*\n?([\s\S]*)$/, (_m, inner: string) => `\n\n:::dm\n${inner.trim()}\n:::`);
+  return out.replace(/\n{3,}/g, "\n\n").trim();
+}
+
 /** Split markdown into public and DM-only segments (`:::dm` … `:::`). */
-export function splitDmBlocks(md: string): MarkdownSegment[] {
+export function splitDmBlocks(input: string): MarkdownSegment[] {
+  const md = normalizeDmBlocks(input);
   const segs: MarkdownSegment[] = [];
   let last = 0;
   for (const m of md.matchAll(DM_BLOCK_RE)) {

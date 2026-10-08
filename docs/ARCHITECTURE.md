@@ -76,11 +76,13 @@ The brief names eight components. Here is where each lives:
 
 ### Change sets and proposals
 
-Generation, session processing, world advancement and lore actions all produce a **change set** (`ai/changeset.ts`): a strict JSON shape of new entities, entity updates, relationships, events, thread updates, rumours, facts, quest updates, campaign-state changes, metric changes, consequences, clue updates and inventory changes. The model is asked for it with structured output; the offline engine builds the same shape.
+Generation, session processing, world advancement and lore actions all produce a **change set** (`ai/changeset.ts`): a strict JSON shape of new entities, entity updates, relationships, events, thread updates, rumours, facts, quest updates, campaign-state changes, metric changes, consequences, clue updates and inventory changes. The offline engine builds the same shape.
+
+The model gets a simpler mirror of it, the wire format: no nullable fields (empty strings, `0` and `"unchanged"` mean "none"), and only the sections the task needs, in priority order with the summary last. Models fill a long schema top to bottom and can stop early, so the sections that matter most to a task come first. It's requested as a single tool call (`viaTool` in `ai/anthropic.ts`), validated with zod after filling defaults, and retried with the validation errors if it doesn't fit. `fromWire` converts it back. Small fixed-shape outputs (continuity notes, quick generators) use strict structured output instead.
 
 `changeSetToDrafts` turns a change set into proposal drafts:
 
-- IDs the model invents are dropped. Only IDs that exist in this world survive.
+- IDs the model invents are dropped. Only IDs that exist in this world survive. A reference with no usable ID is matched by exact name, then alias, against this world's entries and the new entries in the same batch, and kept only when the match is unique.
 - New entities get a `ref`, so other proposals in the same batch can point at them before they exist.
 - Each draft is validated against the payload schema for its kind (`lib/proposals.ts`), the same schemas forms use.
 

@@ -290,15 +290,20 @@ export async function campaignSection(db: DB, b: WorldBundle): Promise<string> {
   if (c.activeSceneId) {
     const [s] = await db.select().from(scenes).where(and(eq(scenes.id, c.activeSceneId), eq(scenes.campaignId, c.id)));
     if (s) {
-      const present = await db
-        .select({ id: entities.id, name: entities.name, type: entities.type })
+      const linked = await db
+        .select({ id: entities.id, name: entities.name, type: entities.type, role: sceneEntities.role })
         .from(sceneEntities)
         .innerJoin(entities, eq(entities.id, sceneEntities.entityId))
         .where(and(eq(sceneEntities.sceneId, s.id), eq(entities.worldId, c.worldId)));
+      const line = (label: string, role: string) => {
+        const xs = linked.filter((p) => p.role === role);
+        return xs.length ? `\n${label}: ${xs.map((p) => `${p.name} ${idTag(p)}`).join(", ")}` : "";
+      };
       parts.push(
-        `Active scene: “${s.name}”${s.mood ? ` · mood: ${s.mood}` : ""}${s.lighting ? ` · lighting: ${s.lighting}` : ""}${s.weather ? ` · weather: ${s.weather}` : ""}\n${truncate(mentionsToPlain(s.description), 400)}${
-          present.length ? `\nPresent: ${present.map((p) => `${p.name} ${idTag(p)}`).join(", ")}` : ""
-        }`,
+        `Active scene: “${s.name}”${s.mood ? ` · mood: ${s.mood}` : ""}${s.lighting ? ` · lighting: ${s.lighting}` : ""}${s.weather ? ` · weather: ${s.weather}` : ""}\n${truncate(mentionsToPlain(s.description), 400)}${line(
+          "Present",
+          "present",
+        )}${line("Threads in play", "thread")}${line("Quests in play", "quest")}`,
       );
     }
   }
@@ -321,11 +326,16 @@ export async function threadsSection(db: DB, worldId: string, limit = 10) {
 
 export async function recentSessionsSection(db: DB, campaignId: string, limit = 3) {
   const ss = await db.select().from(gameSessions).where(eq(gameSessions.campaignId, campaignId)).orderBy(desc(gameSessions.number)).limit(limit);
-  const usable = ss.filter((s) => s.recap.trim() || s.notes.trim());
+  const usable = ss.filter((s) => s.recap.trim() || s.notes.trim() || s.prep.trim());
   if (!usable.length) return "";
+  const state = { planned: " (planned, not played yet)", in_progress: " (being played now)", completed: " (played, notes not processed yet)", processed: "" } as const;
   return [
     "# Recent sessions",
-    ...usable.map((s) => `## Session ${s.number}${s.title ? `: ${s.title}` : ""}\n${truncate(mentionsToPlain(s.recap.trim() || s.notes), 900)}`),
+    ...usable.map((s) => {
+      const text = s.recap.trim() || s.notes.trim();
+      const body = text ? truncate(mentionsToPlain(text), 900) : `DM's prep: ${truncate(mentionsToPlain(s.prep), 500)}`;
+      return `## Session ${s.number}${s.title ? `: ${s.title}` : ""}${state[s.status]}\n${body}`;
+    }),
   ].join("\n");
 }
 

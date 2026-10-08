@@ -121,10 +121,14 @@ export const proposalPayloads = {
     consequenceId: id,
     status: z.enum(["pending", "foreshadowed", "triggered", "resolved", "discarded"]),
     note: z.string().max(1000).default(""),
+    /** The consequence's title when proposed, for the review screen. */
+    label: z.string().max(300).optional(),
   }),
   clue_update: z.object({
     clueId: id,
     discovered: z.boolean(),
+    /** The clue's text when proposed, for the review screen. */
+    label: z.string().max(300).optional(),
   }),
   session_recap: z.object({
     sessionId: id,
