@@ -57,21 +57,6 @@ export async function updateSessionAction(worldId: string, campaignId: string, s
   });
 }
 
-/** Append a timestamped line to the session notes (quick log during play). */
-export async function logToSessionAction(worldId: string, campaignId: string, sessionId: string, line: string, stamp: string) {
-  return run(async () => {
-    await authorizeCampaign(worldId, campaignId, "editor");
-    const db = await getDb();
-    const { getSession } = await import("@/server/services/sessions");
-    const s = await getSession(db, campaignId, sessionId);
-    if (!s) throw new Error("Session not found");
-    const entry = `- **${stamp}** ${line.trim()}`;
-    const notes = s.notes.trim() ? `${s.notes.trimEnd()}\n${entry}` : entry;
-    const row = await updateSession(db, worldId, campaignId, sessionId, { notes });
-    return { notes: row.notes };
-  });
-}
-
 /** End Session workflow: close the session and have the AI propose updates from the notes. */
 export async function endSessionAction(worldId: string, campaignId: string, sessionId: string, opts: { process: boolean }) {
   return run(async () => {

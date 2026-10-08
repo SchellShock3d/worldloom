@@ -44,6 +44,7 @@ export function MarkdownEditor({
   className,
   allowDmBlocks = true,
   autoFocus,
+  ariaLabel,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -54,6 +55,7 @@ export function MarkdownEditor({
   className?: string;
   allowDmBlocks?: boolean;
   autoFocus?: boolean;
+  ariaLabel?: string;
 }) {
   const ref = React.useRef<HTMLTextAreaElement>(null);
   const [mode, setMode] = React.useState<"write" | "preview">("write");
@@ -185,6 +187,7 @@ export function MarkdownEditor({
           <textarea
             ref={ref}
             id={id}
+            aria-label={ariaLabel}
             value={value}
             autoFocus={autoFocus}
             placeholder={placeholder ?? "Write in markdown. Type @ to link people, places and anything else in your world."}

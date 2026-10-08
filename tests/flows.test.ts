@@ -162,3 +162,12 @@ describe("integrity", () => {
     expect(evs.length).toBeGreaterThan(5);
   });
 });
+
+describe("fuzzy search", () => {
+  it("matches a misspelt word inside a longer name", async () => {
+    const { worldId } = await demo();
+    expect((await searchWorld(db, worldId, "Vaell")).some((r) => r.title === "Lord Vael")).toBe(true);
+    expect((await searchWorld(db, worldId, "Sistr Wena")).some((r) => r.title === "Sister Wenna")).toBe(true);
+    expect((await searchWorld(db, worldId, "Isolda")).length).toBe(0);
+  });
+});

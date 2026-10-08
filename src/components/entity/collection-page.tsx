@@ -9,7 +9,7 @@ import { EntityTable } from "./entity-table";
 import { TypeIcon } from "./type-icon";
 import { EmptyState, PageHeader } from "@/components/ui/display";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { cn, lowerLabel } from "@/lib/utils";
 
 export interface CollectionSpec {
   title: string;
@@ -68,7 +68,7 @@ export async function CollectionView({
         actions={
           <Button asChild variant="primary">
             <Link href={`/w/${worldId}/new?type=${createType}`}>
-              <Plus /> New {getEntityType(createType, custom).label.toLowerCase()}
+              <Plus /> New {lowerLabel(getEntityType(createType, custom).label)}
             </Link>
           </Button>
         }

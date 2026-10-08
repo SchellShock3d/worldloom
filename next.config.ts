@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Lets the e2e suite build and serve from its own folder while `next dev` keeps using .next.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   // PGlite ships WASM + data files and postgres-js uses Node sockets; keep both out of the bundle.
   serverExternalPackages: ["@electric-sql/pglite", "postgres"],
   experimental: {

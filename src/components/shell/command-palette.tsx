@@ -11,6 +11,7 @@ import { useWorld } from "./world-context";
 import { setThemeAction } from "@/server/actions/worlds";
 import type { SearchResult } from "@/server/services/search";
 import { Kbd } from "@/components/ui/input";
+import { lowerLabel } from "@/lib/utils";
 
 interface PaletteAction {
   id: string;
@@ -44,6 +45,11 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
   const router = useRouter();
   const [q, setQ] = React.useState("");
   const [results, setResults] = React.useState<SearchResult[]>([]);
+  // Keep the best match highlighted as results stream in, so Enter opens it (not "Create …").
+  const [selected, setSelected] = React.useState("");
+  React.useEffect(() => {
+    if (results[0]) setSelected(`${results[0].kind}-${results[0].id}`);
+  }, [results]);
   const [loading, setLoading] = React.useState(false);
   const base = `/w/${w.worldId}`;
   const c = w.activeCampaign;
@@ -97,7 +103,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
     for (const t of ENTITY_TYPES.filter((t) => !t.hiddenFromCreate && (!t.campaignScoped || c))) {
       list.push({
         id: `create-${t.key}`,
-        label: `New ${t.label.toLowerCase()}`,
+        label: `New ${lowerLabel(t.label)}`,
         group: "Create",
         typeIcon: t.key,
         keywords: `create add ${t.plural}`,
@@ -154,7 +160,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
         <D.Content className="fixed left-1/2 top-[12vh] z-50 w-[calc(100vw-2rem)] max-w-2xl -translate-x-1/2 overflow-hidden rounded-xl border border-line bg-surface shadow-pop data-[state=open]:animate-in">
           <D.Title className="sr-only">Search and commands</D.Title>
           <D.Description className="sr-only">Search the world or run a command</D.Description>
-          <Command shouldFilter={false} loop className="flex max-h-[min(70vh,36rem)] flex-col">
+          <Command shouldFilter={false} loop value={selected} onValueChange={setSelected} className="flex max-h-[min(70vh,36rem)] flex-col">
             <div className="flex items-center gap-2.5 border-b border-line px-4">
               <Search className="size-4 shrink-0 text-faint" />
               <Command.Input

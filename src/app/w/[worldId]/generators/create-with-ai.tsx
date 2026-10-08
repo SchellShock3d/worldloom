@@ -10,7 +10,7 @@ import { EntityPicker, type EntityOption } from "@/components/entity/entity-pick
 import { useWorld } from "@/components/shell/world-context";
 import { generateAction } from "@/server/actions/ai";
 import { PLACE_TYPES } from "@/lib/entity-types";
-import { cn } from "@/lib/utils";
+import { cn, lowerLabel } from "@/lib/utils";
 
 const PRESETS: { key: string; label: string; type: string | null; prompt: string; count?: number }[] = [
   { key: "town", label: "Town", type: "settlement", prompt: "A small town with a distinct identity: who runs it, what it trades, what it fears, two notable locals and a local problem." },
@@ -82,7 +82,7 @@ export function CreateWithAI() {
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <Button variant="primary" onClick={submit} loading={pending}>
-          <Sparkles /> Draft {preset.label.toLowerCase()}
+          <Sparkles /> Draft {lowerLabel(preset.label)}
         </Button>
         {pending && <span className="text-sm text-faint">Reading your world for context…</span>}
       </div>

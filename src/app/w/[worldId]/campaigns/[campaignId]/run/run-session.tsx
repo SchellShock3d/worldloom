@@ -20,7 +20,7 @@ import { MusicPlayer } from "@/components/play/music-player";
 import { DiceRoller, NeedSomethingNow, TableRoller } from "@/components/play/quick-tools";
 import { SceneEditor, emptyScene, type SceneDraft } from "@/components/play/scene-editor";
 import { ChatComposer, ChatThread, useAssistant } from "@/components/ai/assistant-drawer";
-import { activateSceneAction, endSessionAction, logToSessionAction, quickAdvanceAction, updateSessionAction } from "@/server/actions/sessions";
+import { activateSceneAction, endSessionAction, quickAdvanceAction, updateSessionAction } from "@/server/actions/sessions";
 import { setClueDiscoveredAction, toggleObjectiveAction } from "@/server/actions/play";
 import { formatDate, formatTime, timeOfDay, type AdvanceUnit } from "@/lib/calendar";
 import type { RunData } from "@/server/services/run-data";
@@ -72,17 +72,18 @@ export function RunSession({ campaign, data }: { campaign: { id: string; name: s
   }, [saveNotes]);
 
   const stamp = () => `${formatTime(w.calendar, now)}`;
-  const addLog = async (line: string) => {
-    if (!line.trim()) return;
-    if (timer.current) {
-      clearTimeout(timer.current);
-      await saveNotes(latestNotes.current);
-    }
-    const res = await logToSessionAction(w.worldId, campaign.id, session.id, line, stamp());
-    if (!res.ok) return toast.error(res.error);
-    setNotes(res.data.notes);
-    latestNotes.current = res.data.notes;
+  // Quick log appends locally and saves the whole text at once: nothing typed meanwhile can be lost.
+  const addLog = (line: string) => {
+    const text = line.trim();
+    if (!text) return;
+    const cur = latestNotes.current;
+    const next = `${cur.trimEnd()}${cur.trim() ? "\n" : ""}- **${stamp()}** ${text}`;
     setLog("");
+    setNotes(next);
+    latestNotes.current = next;
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+    void saveNotes(next);
   };
 
   const advance = async (amount: number, unit: AdvanceUnit, label: string) => {

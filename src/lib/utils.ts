@@ -74,3 +74,11 @@ export function ok<T>(data: T, message?: string): ActionResult<T> {
 export function fail(error: string, fieldErrors?: Record<string, string>): ActionResult<never> {
   return { ok: false, error, fieldErrors };
 }
+
+/** Lower-case a label for use mid-sentence, keeping acronyms like "NPC" intact. */
+export function lowerLabel(label: string) {
+  return label
+    .split(" ")
+    .map((w) => (/^[A-Z0-9]{2,}$/.test(w) ? w : w.toLowerCase()))
+    .join(" ");
+}

@@ -1,4 +1,3 @@
-import { redirect } from "next/navigation";
 import { requireUser } from "@/server/auth/session";
 import { getDb } from "@/server/db/client";
 import { listWorldsForUser } from "@/server/services/worlds";
@@ -8,12 +7,12 @@ import { getAIProvider } from "@/server/ai/provider";
 
 export const metadata = { title: "Create a world" };
 
-export default async function OnboardingPage({ searchParams }: { searchParams: Promise<{ new?: string }> }) {
+export default async function OnboardingPage() {
   const user = await requireUser();
-  const { new: isNew } = await searchParams;
   const db = await getDb();
+  // No redirect for people who already have worlds: this page is also the "New world" flow, and the
+  // wizard's own server actions re-render it mid-flow (after the first world exists).
   const worlds = await listWorldsForUser(db, user.id);
-  if (worlds.length && !isNew) redirect("/");
   const ai = await getAIProvider();
   return (
     <div className="min-h-dvh">

@@ -17,7 +17,7 @@ import { createEntityAction, updateEntityAction } from "@/server/actions/entitie
 import { getEntityType, PLACE_TYPES, type FieldDef } from "@/lib/entity-types";
 import type { EntityInput } from "@/lib/validation";
 import type { RefMap } from "@/components/common/markdown";
-import { cn } from "@/lib/utils";
+import { cn, lowerLabel } from "@/lib/utils";
 
 export interface EntityFormValue {
   id?: string;
@@ -168,7 +168,7 @@ export function EntityForm({ initial, refs, mode }: { initial: EntityFormValue; 
               aria-label="Name"
               value={v.name}
               onChange={(e) => set("name", e.target.value)}
-              placeholder={`Name this ${def.label.toLowerCase()}`}
+              placeholder={`Name this ${lowerLabel(def.label)}`}
               className="h-12 border-transparent bg-transparent px-0 font-serif text-3xl font-semibold hover:border-transparent focus:border-transparent focus:ring-0"
               aria-invalid={!!errors.name}
               autoFocus={mode === "create"}
@@ -283,7 +283,7 @@ export function EntityForm({ initial, refs, mode }: { initial: EntityFormValue; 
 
         <section>
           <SectionTitle>Article</SectionTitle>
-          <MarkdownEditor value={v.body} onChange={(b) => set("body", b)} refs={refs} minRows={14} />
+          <MarkdownEditor value={v.body} onChange={(b) => set("body", b)} refs={refs} minRows={14} ariaLabel="Article" />
         </section>
 
         <section className="rounded-lg border border-dashed border-ember/40 p-4">
@@ -294,8 +294,8 @@ export function EntityForm({ initial, refs, mode }: { initial: EntityFormValue; 
             {dmFields.map((f) => (
               <FieldInput key={f.key} def={f} value={v.fields[f.key]} onChange={(val) => setField(f.key, val)} />
             ))}
-            <Field label="DM notes">
-              <MarkdownEditor value={v.dmNotes} onChange={(b) => set("dmNotes", b)} refs={refs} minRows={4} allowDmBlocks={false} placeholder="Private notes. Never shown to players." />
+            <Field label="DM notes" htmlFor="ef-dmnotes">
+              <MarkdownEditor id="ef-dmnotes" value={v.dmNotes} onChange={(b) => set("dmNotes", b)} refs={refs} minRows={4} allowDmBlocks={false} placeholder="Private notes. Never shown to players." />
             </Field>
           </div>
         </section>

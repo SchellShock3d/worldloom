@@ -7,6 +7,7 @@ import { blankFormValue } from "@/server/services/entity-form-data";
 import { EntityForm } from "@/components/entity/entity-form";
 import { getEntityType, ENTITY_TYPE_MAP } from "@/lib/entity-types";
 import { getCustomTypes } from "@/server/services/entities";
+import { lowerLabel } from "@/lib/utils";
 
 export const metadata = { title: "New entry" };
 
@@ -25,7 +26,7 @@ export default async function NewEntityPage({ params, searchParams }: { params: 
       <Link href={`/w/${worldId}/wiki`} className="mb-4 inline-flex items-center gap-1 text-sm text-muted hover:text-fg">
         <ChevronLeft className="size-4" /> Wiki
       </Link>
-      <p className="mb-2 text-sm text-faint">New {def.label.toLowerCase()}</p>
+      <p className="mb-2 text-sm text-faint">New {lowerLabel(def.label)}</p>
       <EntityForm initial={initial} mode="create" />
     </div>
   );

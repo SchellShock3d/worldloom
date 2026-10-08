@@ -51,7 +51,7 @@ export async function searchWorld(
     const res = await db.execute(sql`
       select e.id, e.name, e.type, e.summary, e.campaign_id, e.status,
         ts_rank_cd(e.search_vector, ${tsq}) * 2
-          + greatest(similarity(e.name, ${query}), coalesce((select max(similarity(a, ${query})) from unnest(e.aliases) a), 0)) * 1.5
+          + greatest(similarity(e.name, ${query}), word_similarity(${query}, e.name) * 0.9, coalesce((select max(similarity(a, ${query})) from unnest(e.aliases) a), 0)) * 1.5
           + case when lower(e.name) = lower(${query}) then 3 when e.name ilike ${query + "%"} then 1 else 0 end
           + e.importance * 0.1 as score,
         ts_headline('english', coalesce(nullif(e.summary, ''), left(regexp_replace(e.body, '@\\[([^\\]]+)\\]\\(entity:[^)]+\\)', '\\1', 'g'), 1500)), ${tsq},
@@ -61,7 +61,7 @@ export async function searchWorld(
         and e.canon_status <> 'archived'
         and ${campaignFilter}
         and ${typeFilter}
-        and (e.search_vector @@ ${tsq} or e.name % ${query} or e.name ilike ${"%" + query + "%"} or ${query} ilike any(e.aliases))
+        and (e.search_vector @@ ${tsq} or e.name % ${query} or ${query} <% e.name or e.name ilike ${"%" + query + "%"} or ${query} ilike any(e.aliases))
       order by score desc
       limit ${limit}
     `);
