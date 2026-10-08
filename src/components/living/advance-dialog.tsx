@@ -21,7 +21,7 @@ const PRESETS: { label: string; amount: number; unit: AdvanceUnit }[] = [
   { label: "1 month", amount: 1, unit: "months" },
 ];
 
-export function AdvanceDialog({ open, onOpenChange, campaignId, defaultNote }: { open: boolean; onOpenChange: (o: boolean) => void; campaignId: string; defaultNote?: string }) {
+export function AdvanceDialog({ open, onOpenChange, campaignId, defaultNote }: { open: boolean; onOpenChange: (o: boolean) => void; campaignId: string | null; defaultNote?: string }) {
   const w = useWorld();
   const router = useRouter();
   const [amount, setAmount] = React.useState(1);
@@ -50,7 +50,11 @@ export function AdvanceDialog({ open, onOpenChange, campaignId, defaultNote }: {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         title="Advance the world"
-        description="Choose how much in-world time passes. Worldloom examines world threads, faction goals, pending consequences and travel, then proposes what happens. You review every change."
+        description={
+          campaignId
+            ? "Choose how much in-world time passes. Worldloom examines world threads, faction goals, pending consequences and travel, then proposes what happens. You review every change."
+            : "No campaign is selected, so this moves the world clock itself: threads and factions advance, and you review every change. Campaigns keep their own clocks."
+        }
         size="md"
       >
         <div className="flex flex-col gap-4">

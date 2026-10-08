@@ -27,7 +27,7 @@ import { advanceThread, setQuestStatus, updateObjectives } from "./quests";
 import { setCampaignEntityState, commitStateToCanon } from "./campaigns";
 import { createConsequence, updateConsequence, setClueDiscovered, saveNote } from "./play";
 import { updateSession } from "./sessions";
-import { setCampaignTime } from "./clock";
+import { setCampaignTime, setWorldTime } from "./clock";
 import { assertOwned } from "@/server/auth/ownership";
 import { recordRevision, type Actor } from "./history";
 import { mentionToken } from "@/lib/mentions";
@@ -449,7 +449,12 @@ async function applyOne(db: DB, ctx: ApplyCtx, item: Proposal): Promise<Ref[]> {
     }
     case "advance_clock": {
       const p = proposalPayloads.advance_clock.parse(raw);
-      const campaignId = requireCampaign(ctx);
+      if (!ctx.campaignId) {
+        // World-level advance (no campaign): only the world clock moves.
+        await setWorldTime(db, ctx.worldId, ctx.actor, p.toAt);
+        return [];
+      }
+      const campaignId = ctx.campaignId;
       const arrivals = p.arrivals ?? [];
       // Move the party first so the new weather reflects where they end up.
       const last = [...arrivals].reverse().find((x) => x.destinationId);

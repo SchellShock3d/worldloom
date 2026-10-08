@@ -15,7 +15,7 @@ import { Rng, hashSeed } from "./rng";
 
 export async function offlineAdvance(
   db: DB,
-  opts: { worldId: string; campaignId: string; fromAt: number; toAt: number; calendar: CalendarDefinition },
+  opts: { worldId: string; campaignId: string | null; fromAt: number; toAt: number; calendar: CalendarDefinition },
 ): Promise<ChangeSet> {
   const { worldId, campaignId, fromAt, toAt, calendar } = opts;
   const rng = new Rng(hashSeed(worldId, fromAt, toAt));
@@ -165,11 +165,13 @@ export async function offlineAdvance(
     }
   }
 
-  // Consequences and promises that come due.
-  const due = await db
-    .select()
-    .from(consequences)
-    .where(and(eq(consequences.worldId, worldId), eq(consequences.campaignId, campaignId), inArray(consequences.status, ["pending", "foreshadowed"]), lte(consequences.dueAt, toAt)));
+  // Consequences and promises that come due (they belong to a campaign's party).
+  const due = campaignId
+    ? await db
+        .select()
+        .from(consequences)
+        .where(and(eq(consequences.worldId, worldId), eq(consequences.campaignId, campaignId), inArray(consequences.status, ["pending", "foreshadowed"]), lte(consequences.dueAt, toAt)))
+    : [];
   for (const c of due) {
     if (c.actorId && dead.has(c.actorId)) {
       cs.consequenceUpdates.push({ consequenceId: c.id, status: "discarded", rationale: "The one who would have carried it out is dead or gone. Restore it if someone else takes their place." });
@@ -194,10 +196,12 @@ export async function offlineAdvance(
   }
 
   // Travel that completes inside the span.
-  const trips = await db
-    .select()
-    .from(travelPlans)
-    .where(and(eq(travelPlans.campaignId, campaignId), eq(travelPlans.status, "underway"), sql`${travelPlans.departedAt} + coalesce(${travelPlans.estimatedMinutes}, 0) <= ${toAt}`));
+  const trips = campaignId
+    ? await db
+        .select()
+        .from(travelPlans)
+        .where(and(eq(travelPlans.campaignId, campaignId), eq(travelPlans.status, "underway"), sql`${travelPlans.departedAt} + coalesce(${travelPlans.estimatedMinutes}, 0) <= ${toAt}`))
+    : [];
   for (const tr of trips) {
     if (!tr.destinationId) continue;
     cs.events.push({

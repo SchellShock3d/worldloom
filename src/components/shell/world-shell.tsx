@@ -231,7 +231,7 @@ export function WorldShell({ worlds, pendingProposals, user, children, ...value 
       </div>
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
       <QuickCreateDialog request={createReq} onClose={() => setCreateReq(null)} />
-      {c && <AdvanceDialog open={advanceOpen} onOpenChange={setAdvanceOpen} campaignId={c.id} />}
+      <AdvanceDialog open={advanceOpen} onOpenChange={setAdvanceOpen} campaignId={c?.id ?? null} />
     </WorldShellProvider>
   );
 }

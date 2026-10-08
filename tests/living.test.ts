@@ -6,13 +6,13 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import type { DB } from "@/server/db/client";
-import { campaigns, consequences, encounters, entities, travelPlans } from "@/server/db/schema";
+import { campaigns, consequences, encounters, entities, travelPlans, worlds } from "@/server/db/schema";
 import { createDemoWorld } from "@/server/services/seed";
-import { advanceWorld } from "@/server/ai/tasks/world-tasks";
+import { advanceWorld, processSessionNotes } from "@/server/ai/tasks/world-tasks";
 import { applyProposals, getBatch } from "@/server/services/proposals";
 import { setCampaignEntityState, updateCampaign } from "@/server/services/campaigns";
 import { setCampaignTime } from "@/server/services/clock";
-import { createSession, endSession, startSession } from "@/server/services/sessions";
+import { createSession, endSession, startSession, updateSession } from "@/server/services/sessions";
 import { continuityIssues } from "@/server/services/insights";
 import { createEvent } from "@/server/services/timeline";
 import { getCalendar } from "@/server/services/worlds";
@@ -47,6 +47,25 @@ describe("session notes", () => {
     expect(cleanLine("- [9:30 pm] The party left at dawn")).toBe("The party left at dawn");
     expect(cleanLine("1. Met Lady Marr")).toBe("Met Lady Marr");
     expect(cleanLine("3 bandits attacked the wagon")).toBe("3 bandits attacked the wagon");
+  });
+});
+
+describe("offline session analysis", () => {
+  it("notices grudges and newly accepted quests, even when notes drop titles", async () => {
+    const { user, actor, worldId, campaignId } = await demo();
+    const s = await createSession(db, worldId, campaignId, actor, { title: "Fallout" });
+    await startSession(db, worldId, campaignId, actor, s.id);
+    await updateSession(db, worldId, campaignId, s.id, { notes: "- **21:00** Varo now hates the party after the brawl.\nThe party accepted the Sun Crown quest from Lady Marr." });
+    await endSession(db, worldId, campaignId, actor, s.id);
+    const res = await processSessionNotes({ db, worldId, campaignId, userId: user.id, sessionId: s.id });
+    const batch = (await getBatch(db, worldId, res.batchId))!;
+    const varo = batch.items.find((i) => i.kind === "campaign_state" && JSON.stringify(i.payload).includes("Captain Varo"));
+    expect((varo?.payload as { reputationDelta?: number } | undefined)?.reputationDelta).toBeLessThan(0);
+    const quest = batch.items.find((i) => i.kind === "create_entity" && (i.payload as { entity: { type: string } }).entity.type === "quest");
+    expect((quest?.payload as { entity: { name: string } } | undefined)?.entity.name).toBe("Sun Crown");
+    expect(batch.items.some((i) => i.kind === "quest_update")).toBe(true);
+    const recap = batch.items.find((i) => i.kind === "session_recap");
+    expect(String((recap?.payload as { recap: string }).recap)).not.toContain(":00**");
   });
 });
 
@@ -116,6 +135,24 @@ describe("weather and travel", () => {
     const [c1] = await db.select().from(campaigns).where(eq(campaigns.id, campaignId));
     expect(c1!.currentLocationId).toBe(riverfall.id);
     expect(c1!.currentAt).toBe(c0!.currentAt + durationToMinutes(cal, 3, "days"));
+  });
+});
+
+describe("advancing a world without a campaign", () => {
+  it("proposes world developments and moves only the world clock once approved", async () => {
+    const { user, worldId, campaignId } = await demo();
+    const cal = (await getCalendar(db, worldId)).definition;
+    const [w0] = await db.select().from(worlds).where(eq(worlds.id, worldId));
+    const [c0] = await db.select().from(campaigns).where(eq(campaigns.id, campaignId));
+    const res = await advanceWorld({ db, worldId, campaignId: null, userId: user.id, minutes: durationToMinutes(cal, 14, "days") });
+    const batch = (await getBatch(db, worldId, res.batchId))!;
+    expect(batch.items.some((i) => i.kind === "update_thread")).toBe(true);
+    expect(batch.items.some((i) => i.kind === "consequence_update")).toBe(false);
+    await applyProposals(db, worldId, res.batchId, batch.items.map((i) => i.id), user.id);
+    const [w1] = await db.select().from(worlds).where(eq(worlds.id, worldId));
+    const [c1] = await db.select().from(campaigns).where(eq(campaigns.id, campaignId));
+    expect(w1!.currentAt).toBe(w0!.currentAt + durationToMinutes(cal, 14, "days"));
+    expect(c1!.currentAt).toBe(c0!.currentAt);
   });
 });
 

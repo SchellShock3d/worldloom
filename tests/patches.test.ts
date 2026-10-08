@@ -6,6 +6,7 @@ import { createEntity, getEntityTags, updateEntity } from "@/server/services/ent
 import { createCampaign, updateCampaign } from "@/server/services/campaigns";
 import { updateWorld } from "@/server/services/worlds";
 import { onlySent } from "@/lib/validation";
+import { CUSTOM_FIELDS_KEY, customFieldsOf } from "@/lib/entity-types";
 import { setupTestDb, setupWorld } from "./helpers";
 
 let handle: Awaited<ReturnType<typeof setupTestDb>>;
@@ -66,5 +67,17 @@ describe("partial updates", () => {
     expect(row?.worldId).toBe(world.id);
     expect(row?.partyFunds).toBe("214 gp");
     expect(row?.name).toBe("The Crown and the Ash");
+  });
+
+  it("keeps one-off custom fields, dropping incomplete rows", async () => {
+    const { world, actor } = await setupWorld(db);
+    const npc = await createEntity(db, world.id, actor, {
+      type: "npc",
+      name: "Hollis Pell",
+      fields: { occupation: "Innkeeper", [CUSTOM_FIELDS_KEY]: [{ label: "Bounty", value: "500 gp", dmOnly: true }, { label: "", value: "orphan" }, { label: "Drink", value: "" }] },
+    });
+    expect(customFieldsOf(npc.fields)).toEqual([{ label: "Bounty", value: "500 gp", dmOnly: true }]);
+    const after = await updateEntity(db, world.id, actor, npc.id, { fields: { occupation: "Innkeeper", [CUSTOM_FIELDS_KEY]: [{ label: "Favourite drink", value: "Pear brandy", dmOnly: false }] } });
+    expect(customFieldsOf(after.fields).map((f) => f.label)).toEqual(["Favourite drink"]);
   });
 });

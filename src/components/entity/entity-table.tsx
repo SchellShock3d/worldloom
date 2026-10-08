@@ -5,6 +5,7 @@ import { TypeGlyph } from "./type-icon";
 import { Badge } from "@/components/ui/display";
 import { timeAgo } from "@/lib/utils";
 import type { EntityListItem } from "@/server/services/entities";
+import { EntityContextMenu } from "./entity-context-menu";
 
 export function EntityTable({
   worldId,
@@ -13,8 +14,10 @@ export function EntityTable({
   showType = true,
   custom,
   overlays,
+  canEdit = true,
 }: {
   worldId: string;
+  canEdit?: boolean;
   rows: EntityListItem[];
   locations: Record<string, string>;
   showType?: boolean;
@@ -48,7 +51,8 @@ export function EntityTable({
             const ov = overlays?.[r.id];
             const status = ov?.status ?? r.status;
             return (
-              <tr key={r.id} className="group bg-surface hover:bg-surface-2/60">
+              <EntityContextMenu key={r.id} entity={{ id: r.id, name: r.name }} canEdit={canEdit}>
+              <tr className="group bg-surface hover:bg-surface-2/60">
                 <td className="max-w-[28rem] px-3 py-2">
                   <Link href={`/w/${worldId}/e/${r.id}`} className="flex items-center gap-2.5">
                     <TypeGlyph type={r.type} size="sm" />
@@ -80,6 +84,7 @@ export function EntityTable({
                 <td className="max-w-40 truncate px-3 py-2 text-muted">{r.locationId ? locations[r.locationId] : ""}</td>
                 <td className="whitespace-nowrap px-3 py-2 text-right text-xs text-faint">{timeAgo(r.updatedAt)}</td>
               </tr>
+              </EntityContextMenu>
             );
           })}
         </tbody>

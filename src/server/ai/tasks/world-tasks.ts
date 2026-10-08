@@ -112,14 +112,13 @@ async function arrivingJourneys(db: DB, worldId: string, campaignId: string, toA
 }
 
 export async function advanceWorld(b: Base & { minutes: number; note?: string }): Promise<ChangeSetTaskResult> {
-  if (!b.campaignId) throw new Error("Advance World runs inside a campaign.");
   if (!Number.isFinite(b.minutes) || b.minutes <= 0) throw new Error("Choose an amount of time to advance.");
   const bundle = await loadWorldBundle(b.db, b.worldId, b.campaignId);
   const fromAt = bundle.now;
   const toAt = fromAt + b.minutes;
   const span = describeDuration(bundle.calendar, b.minutes);
   const ctx = await buildDmContext(b.db, { worldId: b.worldId, campaignId: b.campaignId, query: b.note ?? "", budgetChars: 28000, maxEntities: 14 });
-  const arrivals = await arrivingJourneys(b.db, b.worldId, b.campaignId, toAt);
+  const arrivals = b.campaignId ? await arrivingJourneys(b.db, b.worldId, b.campaignId, toAt) : [];
   return runChangeSetTask({
     ...b,
     source: "advance",
@@ -151,7 +150,7 @@ Use:
 - consequences: new pending reactions set in motion.
 - facts: who now knows what (e.g. an NPC learning of an event).
 Keep it understandable: 3–12 proposals for short spans, up to ~20 for long spans. No invisible mass changes.`,
-    offline: () => offlineAdvance(b.db, { worldId: b.worldId, campaignId: b.campaignId!, fromAt, toAt, calendar: bundle.calendar }),
+    offline: () => offlineAdvance(b.db, { worldId: b.worldId, campaignId: b.campaignId, fromAt, toAt, calendar: bundle.calendar }),
   });
 }
 

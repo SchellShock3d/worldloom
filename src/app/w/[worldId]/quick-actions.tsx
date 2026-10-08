@@ -12,11 +12,9 @@ export function QuickActions({ hasCampaign, campaignId, mapId }: { hasCampaign: 
   const item = "flex h-9 shrink-0 items-center gap-2 rounded-md border border-line bg-surface px-3 text-sm font-medium text-fg hover:border-line-strong hover:bg-surface-2 [&_svg]:size-4";
   return (
     <nav aria-label="Quick actions" className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
-      {hasCampaign && (
-        <button className={item} onClick={() => w.openAdvance()}>
-          <FastForward className="text-brass" /> Advance world
-        </button>
-      )}
+      <button className={item} onClick={() => w.openAdvance()}>
+        <FastForward className="text-brass" /> Advance world
+      </button>
       <button className={item} onClick={() => w.openQuickCreate({ type: "npc" })}>
         <TypeIcon type="npc" /> New NPC
       </button>

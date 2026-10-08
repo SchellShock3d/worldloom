@@ -24,6 +24,9 @@ const RULES = {
   gained: /\b(found|looted|bought|received|gained|obtained|were given|was given|picked up|stole)\b\s+(?:a |an |the |some )?([^.,;!?\n]{3,60})/i,
   lost: /\b(lost|sold|gave away|spent|used up|broke)\b\s+(?:a |an |the |some |their )?([^.,;!?\n]{3,60})/i,
   moved: /\b(moved to|went to|travelled to|traveled to|arrived at|left for|returned to|headed to)\b/i,
+  hostile: /\b(hates?|despises|loathes|furious|enraged|resents|distrusts|wants revenge|swore revenge|vows? revenge|holds a grudge|turned against|is angry|now angry|humiliated by|won't forgive)\b/i,
+  friendly: /\b(trusts|likes|admires|is grateful|thanked|is fond of|respects|befriended|became friends|owes us a favou?r|owes the party)\b/i,
+  newQuest: /\b(?:accepted|took on|agreed to take|signed up for|were hired for|was hired for)\s+(?:the\s+|a\s+|an\s+)?(.{3,60}?)\s+(?:quest|job|contract|task|mission|commission)\b/i,
   notable: /\b(killed|defeated|rescued|discovered|arrived|met|betrayed|destroyed|stole|burned|captured|freed|escaped|agreed|signed|crowned|attacked|ambushed|fought|negotiated|found)\b/i,
 };
 
@@ -63,7 +66,19 @@ export async function offlineProcessSession(
   // Entities mentioned per line: explicit tokens plus plain names.
   const perLine: { raw: string; text: string; ids: string[] }[] = [];
   const allIds = new Set<string>();
-  const sortedNames = [...index].filter((e) => e.name.length > 2).sort((a, b) => b.name.length - a.name.length);
+  // Notes say "Varo" for "Captain Varo": also match names without their title, when that's unambiguous.
+  const TITLE = /^(captain|lady|lord|sister|brother|king|queen|prince|princess|sir|dame|master|mistress|father|mother|old|duke|duchess|baron|baroness|count|countess|high priest|priestess|commander|general|magister)\s+/i;
+  const short = new Map<string, { id: string; name: string } | null>();
+  for (const e of index) {
+    const m = e.name.match(TITLE);
+    if (!m) continue;
+    const rest = e.name.slice(m[0].length);
+    if (rest.length < 3 || index.some((o) => o.name.toLowerCase() === rest.toLowerCase())) continue;
+    short.set(rest.toLowerCase(), short.has(rest.toLowerCase()) ? null : { id: e.id, name: rest });
+  }
+  const sortedNames = [...index, ...[...short.values()].filter((v): v is { id: string; name: string } => !!v)]
+    .filter((e) => e.name.length > 2)
+    .sort((a, b) => b.name.length - a.name.length);
   const unresolvedNew = new Map<string, string>(); // name → line
   for (const raw of lines) {
     const ids = new Set<string>();
@@ -147,11 +162,14 @@ export async function offlineProcessSession(
 
     for (const x of [...people.filter((p) => byId.get(p)?.type === "npc"), ...groups]) {
       let delta = 0;
-      if (RULES.helped.test(t)) delta = 15;
-      if (RULES.harmed.test(t)) delta = -20;
+      let attitude: string | null = null;
+      if (RULES.helped.test(t)) [delta, attitude] = [15, "grateful"];
+      if (RULES.harmed.test(t)) [delta, attitude] = [-20, "resentful"];
+      if (!delta && RULES.hostile.test(t)) [delta, attitude] = [-15, "hostile"];
+      if (!delta && RULES.friendly.test(t)) [delta, attitude] = [10, "friendly"];
       if (delta && !repDone.has(x)) {
         repDone.set(x, delta);
-        cs.campaignStates.push({ entity: ref(x), status: null, location: null, reputationDelta: delta, attitude: delta > 0 ? "grateful" : "resentful", playersDiscovered: false, rationale: `Notes: “${t}”` });
+        cs.campaignStates.push({ entity: ref(x), status: null, location: null, reputationDelta: delta, attitude, playersDiscovered: false, rationale: `Notes: “${t}”` });
       }
     }
 
@@ -172,6 +190,31 @@ export async function offlineProcessSession(
     for (const q of quests) {
       const status = RULES.questDone.test(t) ? "completed" : RULES.questFail.test(t) ? "failed" : RULES.questStart.test(t) ? "active" : null;
       if (status) cs.questUpdates.push({ quest: ref(q), status, completedObjectives: [], failedObjectives: [], newObjectives: [], rationale: `Notes: “${t}”` });
+    }
+    // "Accepted the Sun Crown quest" with no quest of that name yet: draft one.
+    const nq = !quests.length ? t.match(RULES.newQuest) : null;
+    if (nq) {
+      const title = nq[1]!.replace(/^(the|a|an)\s+/i, "").replace(/^\w/, (c) => c.toUpperCase());
+      const qref = `quest-${title.toLowerCase().replace(/\W+/g, "-")}`;
+      if (!cs.newEntities.some((e) => e.ref === qref)) {
+        const giver = people.find((p) => byId.get(p)?.type === "npc");
+        cs.newEntities.push({
+          ref: qref,
+          type: "quest",
+          name: title,
+          summary: t,
+          body: `Accepted in session ${opts.sessionNumber}${giver ? `, from ${byId.get(giver)!.name}` : ""}.`,
+          status: null,
+          location: places[0] ? ref(places[0]) : null,
+          fields: [],
+          tags: [],
+          aliases: [],
+          visibility: "public",
+          importance: 0,
+          rationale: "The party took on a quest that isn't in your world yet.",
+        });
+        cs.questUpdates.push({ quest: { id: null, ref: qref, name: title }, status: "active", completedObjectives: [], failedObjectives: [], newObjectives: [], rationale: `Notes: “${t}”` });
+      }
     }
 
     if (RULES.learned.test(t)) {

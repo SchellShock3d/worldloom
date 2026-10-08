@@ -6,6 +6,7 @@ import { entities, campaignEntityStates } from "@/server/db/schema";
 import { listEntities, listTags, getCustomTypes, campaignScope } from "@/server/services/entities";
 import { getEntityType, type EntityTypeDef } from "@/lib/entity-types";
 import { EntityTable } from "./entity-table";
+import { requireWorld } from "@/server/auth/access";
 import { TypeIcon } from "./type-icon";
 import { EmptyState, PageHeader } from "@/components/ui/display";
 import { Button } from "@/components/ui/button";
@@ -32,6 +33,7 @@ export async function CollectionView({
   searchParams: { type?: string; q?: string; tag?: string; status?: string; sort?: string; canon?: string };
 }) {
   const custom = await getCustomTypes(db, worldId);
+  const { role } = await requireWorld(worldId);
   const activeType = searchParams.type && spec.types.includes(searchParams.type) ? searchParams.type : null;
   const types = activeType ? [activeType] : spec.types;
   const canon = searchParams.canon === "archived" ? (["archived"] as const) : searchParams.canon === "drafts" ? (["draft", "proposed"] as const) : undefined;
@@ -140,7 +142,7 @@ export async function CollectionView({
         )}
       </div>
       {rows.length ? (
-        <EntityTable worldId={worldId} rows={rows} locations={Object.fromEntries(locs.map((l) => [l.id, l.name]))} custom={custom} overlays={Object.fromEntries(overlays.map((o) => [o.entityId, { status: o.status, reputation: o.reputation, knowledge: o.knowledge }]))} />
+        <EntityTable worldId={worldId} canEdit={role === "owner" || role === "editor"} rows={rows} locations={Object.fromEntries(locs.map((l) => [l.id, l.name]))} custom={custom} overlays={Object.fromEntries(overlays.map((o) => [o.entityId, { status: o.status, reputation: o.reputation, knowledge: o.knowledge }]))} />
       ) : (
         <EmptyState
           title={searchParams.q || searchParams.tag || searchParams.status ? "Nothing matches those filters" : `No ${spec.title.toLowerCase()} yet`}

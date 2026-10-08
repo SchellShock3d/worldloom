@@ -77,7 +77,7 @@ export function WorldClock({ onAdvance }: { onAdvance?: () => void }) {
           <Button asChild variant="ghost" size="sm">
             <Link href={`/w/${w.worldId}/calendar`}>Open calendar</Link>
           </Button>
-          {onAdvance && w.activeCampaign && (
+          {onAdvance && (
             <Button variant="primary" size="sm" onClick={onAdvance}>
               <FastForward /> Advance time
             </Button>

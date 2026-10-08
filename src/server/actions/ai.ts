@@ -11,6 +11,7 @@ import { advanceWorld, generateContent, loreAction, processSessionNotes, suggest
 import { EMERGENCY_KINDS, needSomethingNow, prepareSession, runContinuity, type EmergencyKind } from "@/server/ai/tasks/dm-tools";
 import { getAIProvider, providerInfo } from "@/server/ai/provider";
 import { durationToMinutes, type AdvanceUnit } from "@/lib/calendar";
+import { loadWorldBundle } from "@/server/ai/context";
 import { endSession } from "@/server/services/sessions";
 import { userActor } from "@/server/services/history";
 import { run } from "./_util";
@@ -88,13 +89,16 @@ export async function processSessionAction(worldId: string, campaignId: string, 
   });
 }
 
-export async function advanceWorldAction(worldId: string, campaignId: string, input: { amount: number; unit: AdvanceUnit; note?: string }) {
+/** Advance a campaign's world (campaignId) or, with no campaign, the world itself. */
+export async function advanceWorldAction(worldId: string, campaignId: string | null, input: { amount: number; unit: AdvanceUnit; note?: string }) {
   return run(async () => {
-    const { user, calendar, campaign } = await authorizeCampaign(worldId, campaignId, "editor");
-    if (!(input.amount > 0) || input.amount > 1000) throw new Error("Choose an amount between 1 and 1000.");
-    const minutes = durationToMinutes(calendar, input.amount, input.unit, campaign.currentAt);
+    const { user, calendar, world, campaignId: cid } = await authorizeScope(worldId, campaignId, "editor");
+    const amount = z.number().int().min(1, "Choose an amount between 1 and 1000.").max(1000, "Choose an amount between 1 and 1000.").parse(input.amount);
+    const unit = z.enum(["minutes", "hours", "days", "weeks", "months", "years"]).parse(input.unit);
     const db = await getDb();
-    const res = await advanceWorld({ db, worldId, campaignId, userId: user.id, minutes, note: input.note });
+    const from = cid ? (await loadWorldBundle(db, worldId, cid)).now : world.currentAt;
+    const minutes = durationToMinutes(calendar, amount, unit, from);
+    const res = await advanceWorld({ db, worldId, campaignId: cid, userId: user.id, minutes, note: text(2000).optional().parse(input.note) });
     refresh(worldId);
     return res;
   });

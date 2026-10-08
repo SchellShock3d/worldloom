@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ChevronDown, FastForward, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, Tooltip } from "@/components/ui/overlays";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/overlays";
 import { useWorld } from "@/components/shell/world-context";
 import { moveThreadAction } from "@/server/actions/play";
 
@@ -17,19 +17,9 @@ export function ThreadsHeaderActions({ hasCampaign }: { hasCampaign: boolean }) 
       <Button variant="secondary" onClick={() => w.openQuickCreate({ type: "world_thread", onCreated: () => router.refresh() })}>
         <Plus /> New thread
       </Button>
-      {hasCampaign ? (
-        <Button variant="primary" onClick={() => w.openAdvance()}>
-          <FastForward /> Advance the world
-        </Button>
-      ) : (
-        <Tooltip content="Choose a campaign first: time passes for a campaign.">
-          <span>
-            <Button variant="primary" disabled>
-              <FastForward /> Advance the world
-            </Button>
-          </span>
-        </Tooltip>
-      )}
+      <Button variant="primary" onClick={() => w.openAdvance()} title={hasCampaign ? undefined : "Moves the world clock (no campaign selected)"}>
+        <FastForward /> Advance the world
+      </Button>
     </>
   );
 }
