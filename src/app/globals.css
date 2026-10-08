@@ -1,0 +1,363 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Worldloom tokens.
+ * Ink-blue base, verdigris primary, brass for time & canon, arcane violet for
+ * AI and proposals, ember for danger/escalation. Entity groups carry their own
+ * hues, used only as small identifying marks.
+ */
+:root {
+  --bg: #f4f5f7;
+  --bg-subtle: #eceef2;
+  --surface: #ffffff;
+  --surface-2: #f7f8fa;
+  --surface-3: #eef0f4;
+  --line: #e0e3ea;
+  --line-strong: #c9ced9;
+  --text: #1b1f2b;
+  --text-muted: #555c6c;
+  --text-faint: #868c9c;
+  --accent: #2b8475;
+  --accent-hover: #236f62;
+  --accent-fg: #ffffff;
+  --accent-soft: rgba(43, 132, 117, 0.1);
+  --brass: #8f6e26;
+  --brass-soft: rgba(146, 113, 42, 0.11);
+  --arcane: #6a55d4;
+  --arcane-soft: rgba(106, 85, 212, 0.09);
+  --ember: #c0452c;
+  --ember-soft: rgba(192, 69, 44, 0.09);
+  --type-people: #b8742e;
+  --type-places: #2a7fa3;
+  --type-powers: #b44a62;
+  --type-culture: #8e5aa8;
+  --type-things: #94801f;
+  --type-lore: #5a8a45;
+  --type-play: #c25f38;
+  --shadow-pop: 0 12px 32px -8px rgba(20, 26, 40, 0.22), 0 2px 6px rgba(20, 26, 40, 0.08);
+  --overlay: rgba(18, 22, 32, 0.45);
+  color-scheme: light;
+}
+
+.dark {
+  --bg: #13161e;
+  --bg-subtle: #0f1218;
+  --surface: #1a1e29;
+  --surface-2: #212634;
+  --surface-3: #2a3042;
+  --line: #282e3d;
+  --line-strong: #394155;
+  --text: #e7e5df;
+  --text-muted: #a2a8b6;
+  --text-faint: #6f7687;
+  --accent: #5bb3a4;
+  --accent-hover: #6fc4b5;
+  --accent-fg: #0b1a17;
+  --accent-soft: rgba(91, 179, 164, 0.14);
+  --brass: #cdac60;
+  --brass-soft: rgba(201, 168, 92, 0.14);
+  --arcane: #a597f4;
+  --arcane-soft: rgba(156, 140, 240, 0.15);
+  --ember: #e8775f;
+  --ember-soft: rgba(224, 112, 90, 0.15);
+  --type-people: #e0a466;
+  --type-places: #5aaed0;
+  --type-powers: #df8396;
+  --type-culture: #c69bdb;
+  --type-things: #cfb95e;
+  --type-lore: #94c27e;
+  --type-play: #ee8f6a;
+  --shadow-pop: 0 16px 40px -10px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.35);
+  --overlay: rgba(5, 7, 12, 0.62);
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-bg-subtle: var(--bg-subtle);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-fg: var(--text);
+  --color-muted: var(--text-muted);
+  --color-faint: var(--text-faint);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-soft: var(--accent-soft);
+  --color-brass: var(--brass);
+  --color-brass-soft: var(--brass-soft);
+  --color-arcane: var(--arcane);
+  --color-arcane-soft: var(--arcane-soft);
+  --color-ember: var(--ember);
+  --color-ember-soft: var(--ember-soft);
+  --color-people: var(--type-people);
+  --color-places: var(--type-places);
+  --color-powers: var(--type-powers);
+  --color-culture: var(--type-culture);
+  --color-things: var(--type-things);
+  --color-lore: var(--type-lore);
+  --color-play: var(--type-play);
+
+  --font-sans: "Instrument Sans Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-serif: "Alegreya Variable", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1rem;
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1.1rem;
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base: 0.875rem;
+  --text-base--line-height: 1.4rem;
+  --text-md: 0.9375rem;
+  --text-md--line-height: 1.5rem;
+
+  --radius-sm: 5px;
+  --radius-md: 7px;
+  --radius-lg: 11px;
+  --radius-xl: 14px;
+
+  --shadow-pop: var(--shadow-pop);
+  --animate-in: wl-in 140ms ease-out;
+  --animate-drawer: wl-drawer 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes wl-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes wl-drawer {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+@layer base {
+  html {
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: var(--text-base);
+    line-height: 1.45;
+    font-feature-settings: "ss01", "cv11";
+  }
+  ::selection {
+    background: var(--accent-soft);
+  }
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  input,
+  textarea,
+  select,
+  button {
+    font: inherit;
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-strong) transparent;
+  }
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Lore prose: wiki bodies, session notes, AI answers.
+ * ------------------------------------------------------------------------- */
+.lore {
+  font-family: var(--font-serif);
+  font-size: 1.0625rem;
+  line-height: 1.68;
+  color: var(--text);
+  max-width: 70ch;
+}
+.lore > * + * {
+  margin-top: 0.85em;
+}
+.lore h1,
+.lore h2,
+.lore h3,
+.lore h4 {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  line-height: 1.25;
+  margin-top: 1.5em;
+}
+.lore h1 {
+  font-size: 1.6rem;
+}
+.lore h2 {
+  font-size: 1.35rem;
+}
+.lore h3 {
+  font-size: 1.15rem;
+}
+.lore h4 {
+  font-size: 1.02rem;
+}
+.lore ul,
+.lore ol {
+  padding-left: 1.3em;
+}
+.lore ul {
+  list-style: disc;
+}
+.lore ol {
+  list-style: decimal;
+}
+.lore li + li {
+  margin-top: 0.25em;
+}
+.lore li::marker {
+  color: var(--text-faint);
+}
+.lore blockquote {
+  border-left: 2px solid var(--brass);
+  padding-left: 1em;
+  color: var(--text-muted);
+  font-style: italic;
+}
+.lore a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  text-underline-offset: 3px;
+}
+.lore code {
+  font-size: 0.85em;
+  background: var(--surface-3);
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+}
+.lore hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 1.6em 0;
+}
+.lore table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+}
+.lore th,
+.lore td {
+  border-bottom: 1px solid var(--line);
+  padding: 0.4em 0.6em;
+  text-align: left;
+}
+.lore strong {
+  font-weight: 700;
+}
+.lore--compact {
+  font-size: 0.98rem;
+  line-height: 1.58;
+}
+.lore--sans {
+  font-family: var(--font-sans);
+  font-size: var(--text-md);
+  line-height: 1.6;
+}
+
+/* Inline entity mention */
+.mention {
+  font-family: var(--font-sans);
+  font-size: 0.86em;
+  font-weight: 550;
+  color: var(--mention-color, var(--accent));
+  background: color-mix(in srgb, var(--mention-color, var(--accent)) 12%, transparent);
+  border-radius: 4px;
+  padding: 0.05em 0.35em 0.1em;
+  text-decoration: none !important;
+  white-space: nowrap;
+}
+.mention:hover {
+  background: color-mix(in srgb, var(--mention-color, var(--accent)) 22%, transparent);
+}
+.mention--missing {
+  --mention-color: var(--ember);
+  text-decoration: line-through !important;
+}
+
+/* DM-only block inside lore */
+.dm-block {
+  border: 1px dashed color-mix(in srgb, var(--ember) 45%, transparent);
+  background: var(--ember-soft);
+  border-radius: var(--radius-md);
+  padding: 0.6em 0.9em;
+}
+.dm-block::before {
+  content: "DM only";
+  display: block;
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  color: var(--ember);
+  margin-bottom: 0.25em;
+}
+
+/* Thread line: the woven progress mark used for world threads */
+.thread-line {
+  position: relative;
+  height: 10px;
+}
+.thread-line::before {
+  content: "";
+  position: absolute;
+  inset: 4px 0;
+  background: repeating-linear-gradient(90deg, var(--line-strong) 0 6px, transparent 6px 9px);
+  border-radius: 2px;
+}
+.thread-line > .thread-fill {
+  position: absolute;
+  left: 0;
+  top: 3px;
+  height: 4px;
+  border-radius: 3px;
+  background: var(--thread-color, var(--accent));
+}
+.thread-line > .thread-knot {
+  position: absolute;
+  top: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  transform: translateX(-50%);
+  background: var(--surface);
+  border: 2px solid var(--thread-color, var(--accent));
+}
