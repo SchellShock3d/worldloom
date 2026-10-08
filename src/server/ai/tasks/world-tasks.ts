@@ -1,7 +1,7 @@
 /** State-changing AI tasks. Every one ends in a proposal batch. */
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import type { DB } from "@/server/db/client";
-import { entities, gameSessions } from "@/server/db/schema";
+import { entities, gameSessions, travelPlans } from "@/server/db/schema";
 import { describeDuration, formatDate } from "@/lib/calendar";
 import { getEntityType } from "@/lib/entity-types";
 import { mentionsToPlain } from "@/lib/mentions";
@@ -99,6 +99,18 @@ Produce:
 // Advance World
 // ---------------------------------------------------------------------------
 
+/** Journeys underway that reach their destination by `toAt`, in arrival order. */
+async function arrivingJourneys(db: DB, worldId: string, campaignId: string, toAt: number) {
+  const trips = await db
+    .select({ id: travelPlans.id, name: travelPlans.name, destinationId: travelPlans.destinationId, departedAt: travelPlans.departedAt, estimatedMinutes: travelPlans.estimatedMinutes, dest: entities.name })
+    .from(travelPlans)
+    .leftJoin(entities, and(eq(entities.id, travelPlans.destinationId), eq(entities.worldId, worldId)))
+    .where(and(eq(travelPlans.campaignId, campaignId), eq(travelPlans.worldId, worldId), eq(travelPlans.status, "underway"), sql`${travelPlans.departedAt} + coalesce(${travelPlans.estimatedMinutes}, 0) <= ${toAt}`));
+  return trips
+    .sort((a, b) => (a.departedAt ?? 0) + (a.estimatedMinutes ?? 0) - ((b.departedAt ?? 0) + (b.estimatedMinutes ?? 0)))
+    .map((t) => ({ travelId: t.id, destinationId: t.destinationId && t.dest ? t.destinationId : null, name: t.dest ?? (t.name || "journey's end") }));
+}
+
 export async function advanceWorld(b: Base & { minutes: number; note?: string }): Promise<ChangeSetTaskResult> {
   if (!b.campaignId) throw new Error("Advance World runs inside a campaign.");
   if (!Number.isFinite(b.minutes) || b.minutes <= 0) throw new Error("Choose an amount of time to advance.");
@@ -107,6 +119,7 @@ export async function advanceWorld(b: Base & { minutes: number; note?: string })
   const toAt = fromAt + b.minutes;
   const span = describeDuration(bundle.calendar, b.minutes);
   const ctx = await buildDmContext(b.db, { worldId: b.worldId, campaignId: b.campaignId, query: b.note ?? "", budgetChars: 28000, maxEntities: 14 });
+  const arrivals = await arrivingJourneys(b.db, b.worldId, b.campaignId, toAt);
   return runChangeSetTask({
     ...b,
     source: "advance",
@@ -116,10 +129,17 @@ export async function advanceWorld(b: Base & { minutes: number; note?: string })
     calendar: bundle.calendar,
     fromAt,
     toAt,
-    leadingDrafts: [{ kind: "advance_clock", rationale: `${formatDate(bundle.calendar, fromAt)} → ${formatDate(bundle.calendar, toAt)}`, payload: { fromAt, toAt } }],
+    leadingDrafts: [
+      {
+        kind: "advance_clock",
+        rationale: `${formatDate(bundle.calendar, fromAt)} → ${formatDate(bundle.calendar, toAt)}${arrivals.length ? `; journeys end: ${arrivals.map((x) => x.name).join(", ")}` : ""}`,
+        payload: { fromAt, toAt, ...(arrivals.length && { arrivals }) },
+      },
+    ],
     instructions: `ADVANCE WORLD: ${span} pass, from ${formatDate(bundle.calendar, fromAt)} to ${formatDate(bundle.calendar, toAt)} (${Math.round(b.minutes / (bundle.calendar.hoursPerDay * bundle.calendar.minutesPerHour))} days).${b.note ? `\nDM note: ${b.note}` : ""}
 
 Examine the world threads, faction goals and current plans, NPC goals, scheduled/upcoming events, pending consequences and promises, travel, and recent campaign actions. Propose the developments that would LOGICALLY occur in this span, whether or not the party is present. Be proportionate to the time: a day brings small shifts; a month can bring turning points.
+The dead stay dead: characters whose status is dead (in canon or in this campaign), and factions that are destroyed or disbanded, cannot act, travel, lead or take part in new events. A thread or consequence that depended on them stalls or passes to someone else, and you must say who.
 
 Use:
 - threadUpdates: progress for each thread that moves (respect momentum; escalate or resolve when warranted).

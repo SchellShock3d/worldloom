@@ -486,14 +486,10 @@ export async function buildNpcContext(db: DB, worldId: string, npcId: string, ca
   // Their own card, including their own secrets.
   parts.push(await entityCard(db, worldId, npc, { campaignId: bundle.campaign?.id, bodyChars: 1200, relLimit: 12 }));
   const { own, viaGroups } = await getKnowledgeBoundary(db, worldId, npcId, bundle.campaign?.id);
-  if (own.length) {
-    parts.push(
-      `# What ${npc.name} knows or believes\n${own
-        .map((f) => `- ${f.fact.statement}${f.fact.truthStatus === "false" ? " (they believe this; it may not be true)" : f.fact.truthStatus === "partial" ? " (partial picture)" : ""}${f.fact.confidence < 50 ? " (unsure)" : ""}`)
-        .join("\n")}`,
-    );
-  }
-  if (viaGroups.length) parts.push(`# Known within their circles\n${viaGroups.map((f) => `- (${f.holderName}) ${f.fact.statement}`).join("\n")}`);
+  const knows = own.map((f) => `${f.fact.statement}${f.fact.truthStatus === "false" ? " (they believe this; it may not be true)" : f.fact.truthStatus === "partial" ? " (partial picture)" : ""}${f.fact.confidence < 50 ? " (unsure)" : ""}`);
+  const circles = viaGroups.map((f) => `(${f.holderName}) ${f.fact.statement}`);
+  if (knows.length) parts.push(`# What ${npc.name} knows or believes\n${knows.map((k) => `- ${k}`).join("\n")}`);
+  if (circles.length) parts.push(`# Known within their circles\n${circles.map((k) => `- ${k}`).join("\n")}`);
   // Common knowledge around them: public entities in their location chain and public rumours there.
   if (npc.locationId) {
     const around = await db
@@ -506,6 +502,7 @@ export async function buildNpcContext(db: DB, worldId: string, npcId: string, ca
     if (cards.length) parts.push(`# Common knowledge about their surroundings\n${cards.join("\n\n")}`);
   }
   const publicEvents = await listTimeline(db, worldId, { campaignId: bundle.campaign?.id ?? null, to: bundle.now, order: "desc", limit: 6, visibleOnly: true });
-  if (publicEvents.length) parts.push(`# Public news they'd have heard\n${publicEvents.map((e) => `- ${e.name}${e.summary ? `: ${truncate(e.summary, 120)}` : ""}`).join("\n")}`);
-  return { text: parts.join("\n\n"), npc, bundle };
+  const news = publicEvents.map((e) => `${e.name}${e.summary ? `: ${truncate(e.summary, 120)}` : ""}`);
+  if (news.length) parts.push(`# Public news they'd have heard\n${news.map((n) => `- ${n}`).join("\n")}`);
+  return { text: parts.join("\n\n"), npc, bundle, knows, circles, news };
 }

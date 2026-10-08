@@ -7,7 +7,7 @@
  */
 import { and, eq, inArray, lte, sql } from "drizzle-orm";
 import type { DB } from "@/server/db/client";
-import { consequences, entities, relationships, travelPlans } from "@/server/db/schema";
+import { campaignEntityStates, consequences, entities, relationships, travelPlans } from "@/server/db/schema";
 import { describeDuration, durationToMinutes, minutesPerDay, type CalendarDefinition } from "@/lib/calendar";
 import { listThreads } from "@/server/services/quests";
 import { emptyChangeSet, type ChangeSet } from "../changeset";
@@ -26,6 +26,8 @@ export async function offlineAdvance(
   const dayIn = () => (spanDays <= 1 ? 0 : rng.int(0, Math.max(0, Math.floor(spanDays) - 1)));
   const highlights: string[] = [];
 
+  // The dead (and destroyed or disbanded) don't act. A campaign can override canon either way.
+  const dead = await goneInCampaign(db, worldId, campaignId);
   const threads = await listThreads(db, worldId, { statuses: ["active", "escalating", "dormant"] });
   const threadIds = threads.map((t) => t.id);
   const threatRows = threadIds.length
@@ -38,7 +40,15 @@ export async function offlineAdvance(
 
   for (const t of threads) {
     const th = t.thread;
+    const declaredDrivers = t.actors.filter((a) => a.role === "drives");
+    t.actors = t.actors.filter((a) => !dead.has(a.id));
     const drivers = t.actors.filter((a) => a.role === "drives" || a.type === "faction");
+    if (th.status !== "dormant" && declaredDrivers.length > 0 && declaredDrivers.every((a) => dead.has(a.id))) {
+      const names = declaredDrivers.map((a) => a.name).join(" and ");
+      cs.threadUpdates.push({ thread: { id: t.id, ref: null, name: t.name }, progressDelta: 0, status: "paused", nextMilestone: null, rationale: `${names} drove this thread and ${declaredDrivers.length > 1 ? "are" : "is"} gone. Decide whether someone else takes it up.` });
+      highlights.push(`${t.name} falters without ${names}`);
+      continue;
+    }
     const places = threatRows.filter((r) => r.threadId === t.id && ["settlement", "region", "location", "nation"].includes(r.type));
     const placeRef = t.locationId ? { id: t.locationId, ref: null, name: "" } : places[0] ? { id: places[0].id, ref: null, name: places[0].name } : null;
 
@@ -161,6 +171,11 @@ export async function offlineAdvance(
     .from(consequences)
     .where(and(eq(consequences.worldId, worldId), eq(consequences.campaignId, campaignId), inArray(consequences.status, ["pending", "foreshadowed"]), lte(consequences.dueAt, toAt)));
   for (const c of due) {
+    if (c.actorId && dead.has(c.actorId)) {
+      cs.consequenceUpdates.push({ consequenceId: c.id, status: "discarded", rationale: "The one who would have carried it out is dead or gone. Restore it if someone else takes their place." });
+      highlights.push(`${c.title} won't happen as planned`);
+      continue;
+    }
     const overdueAlready = c.dueAt !== null && c.dueAt < fromAt;
     cs.consequenceUpdates.push({ consequenceId: c.id, status: "triggered", rationale: overdueAlready ? "It was already overdue." : "Its due date passed during this span." });
     cs.events.push({
@@ -203,6 +218,25 @@ export async function offlineAdvance(
     ? `Over ${describeDuration(calendar, span)}: ${highlights.slice(0, 5).join("; ")}${highlights.length > 5 ? `; and ${highlights.length - 5} more` : ""}.`
     : `${describeDuration(calendar, span)} pass quietly. World threads inch forward but nothing reaches a turning point.`;
   return cs;
+}
+
+const GONE = ["dead", "destroyed", "disbanded"];
+
+/** Entities that can no longer act in this campaign: gone in canon unless the campaign says otherwise, or gone in the campaign. */
+export async function goneInCampaign(db: DB, worldId: string, campaignId: string | null): Promise<Set<string>> {
+  const canon = await db.select({ id: entities.id }).from(entities).where(and(eq(entities.worldId, worldId), inArray(entities.status, GONE)));
+  const set = new Set(canon.map((r) => r.id));
+  if (campaignId) {
+    const overlay = await db
+      .select({ id: campaignEntityStates.entityId, status: campaignEntityStates.status })
+      .from(campaignEntityStates)
+      .where(and(eq(campaignEntityStates.campaignId, campaignId), sql`${campaignEntityStates.status} is not null`));
+    for (const o of overlay) {
+      if (GONE.includes(o.status!)) set.add(o.id);
+      else set.delete(o.id);
+    }
+  }
+  return set;
 }
 
 function distort(name: string, rng: Rng, accuracy: number) {

@@ -7,12 +7,11 @@ import { getDb } from "@/server/db/client";
 import { authorizeCampaign, authorizeWorld } from "@/server/auth/access";
 import { campaigns, randomTables, randomTableEntries, travelPlans, entities, audioTracks, audioProfiles, encounters, encounterCombatants } from "@/server/db/schema";
 import { climateAt, weatherFor } from "@/server/services/weather";
-import { userActor } from "@/server/services/history";
-import { setCampaignTime } from "@/server/services/clock";
 import { Rng, hashSeed } from "@/server/ai/offline/rng";
 import { describeDuration, durationToMinutes, minutesPerDay } from "@/lib/calendar";
 import { getGameSystem } from "@/lib/game-systems/dnd5e";
 import { assertOwned } from "@/server/auth/ownership";
+import { advanceWorld } from "@/server/ai/tasks/world-tasks";
 import { run } from "./_util";
 
 const refresh = (worldId: string) => revalidatePath(`/w/${worldId}`, "layout");
@@ -152,20 +151,33 @@ export async function departTravelAction(worldId: string, campaignId: string, tr
   });
 }
 
-/** Arrive immediately: moves the clock by the estimated duration and the party to the destination. */
+/**
+ * Travel to the destination. The journey's time passes through Advance World,
+ * so the world keeps moving while the party is on the road; approving the
+ * resulting proposals moves the clock and the party and marks the trip arrived.
+ */
 export async function arriveTravelAction(worldId: string, campaignId: string, travelId: string) {
   return run(async () => {
     const { user, campaign, calendar } = await authorizeCampaign(worldId, campaignId, "editor");
     const db = await getDb();
-    const [t] = await db.select().from(travelPlans).where(and(eq(travelPlans.id, travelId), eq(travelPlans.campaignId, campaignId)));
+    const [t] = await db.select().from(travelPlans).where(and(eq(travelPlans.id, travelId), eq(travelPlans.campaignId, campaignId), eq(travelPlans.worldId, worldId)));
     if (!t) throw new Error("Journey not found");
+    if (t.status === "arrived") throw new Error("The party has already arrived.");
     const departed = t.departedAt ?? campaign.currentAt;
-    const arrival = Math.max(campaign.currentAt, departed + (t.estimatedMinutes ?? durationToMinutes(calendar, 1, "days")));
-    await setCampaignTime(db, worldId, campaignId, userActor(user.id), arrival, `Travelled${t.name ? `: ${t.name}` : ""}`);
-    await db.update(travelPlans).set({ status: "arrived", departedAt: departed, arrivedAt: arrival }).where(eq(travelPlans.id, travelId));
-    if (t.destinationId) await db.update(campaigns).set({ currentLocationId: t.destinationId }).where(eq(campaigns.id, campaignId));
+    const duration = t.estimatedMinutes ?? durationToMinutes(calendar, 1, "days");
+    await db.update(travelPlans).set({ status: "underway", departedAt: departed, estimatedMinutes: duration }).where(eq(travelPlans.id, t.id));
+    const minutes = Math.max(1, departed + duration - campaign.currentAt);
+    const [dest] = t.destinationId ? await db.select({ name: entities.name }).from(entities).where(and(eq(entities.id, t.destinationId), eq(entities.worldId, worldId))) : [];
+    const note = [
+      `The party travels${t.name ? ` (${t.name})` : ""}${dest ? ` to ${dest.name}` : ""}${t.method ? ` by ${t.method}` : ""}.`,
+      t.terrain && `Terrain: ${t.terrain}.`,
+      t.encounterNotes && `Possible encounters on the way: ${t.encounterNotes}`,
+    ]
+      .filter(Boolean)
+      .join(" ");
+    const res = await advanceWorld({ db, worldId, campaignId, userId: user.id, minutes, note });
     refresh(worldId);
-    return { arrivedAt: arrival, span: describeDuration(calendar, arrival - campaign.currentAt) };
+    return { batchId: res.batchId, span: describeDuration(calendar, minutes) };
   });
 }
 

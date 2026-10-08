@@ -13,6 +13,7 @@ import {
   proposalBatches,
   proposals,
   relationships,
+  travelPlans,
   type Proposal,
   type ProposalBatch,
   type ProposalSource,
@@ -27,6 +28,7 @@ import { setCampaignEntityState, commitStateToCanon } from "./campaigns";
 import { createConsequence, updateConsequence, setClueDiscovered, saveNote } from "./play";
 import { updateSession } from "./sessions";
 import { setCampaignTime } from "./clock";
+import { assertOwned } from "@/server/auth/ownership";
 import { recordRevision, type Actor } from "./history";
 import { mentionToken } from "@/lib/mentions";
 
@@ -448,7 +450,20 @@ async function applyOne(db: DB, ctx: ApplyCtx, item: Proposal): Promise<Ref[]> {
     case "advance_clock": {
       const p = proposalPayloads.advance_clock.parse(raw);
       const campaignId = requireCampaign(ctx);
-      await setCampaignTime(db, ctx.worldId, campaignId, ctx.actor, p.toAt, "Advance world");
+      const arrivals = p.arrivals ?? [];
+      // Move the party first so the new weather reflects where they end up.
+      const last = [...arrivals].reverse().find((x) => x.destinationId);
+      if (last?.destinationId) {
+        await assertOwned(db, ctx.worldId, { entities: [last.destinationId] });
+        await db.update(campaigns).set({ currentLocationId: last.destinationId }).where(eq(campaigns.id, campaignId));
+      }
+      await setCampaignTime(db, ctx.worldId, campaignId, ctx.actor, p.toAt, arrivals.length ? `Advance world; the party arrives at ${arrivals.map((x) => x.name).join(", ")}` : "Advance world");
+      for (const x of arrivals) {
+        await db
+          .update(travelPlans)
+          .set({ status: "arrived", arrivedAt: p.toAt })
+          .where(and(eq(travelPlans.id, x.travelId), eq(travelPlans.campaignId, campaignId), eq(travelPlans.worldId, ctx.worldId)));
+      }
       return [{ kind: "campaign", id: campaignId }];
     }
     case "create_note": {

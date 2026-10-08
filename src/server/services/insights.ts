@@ -27,6 +27,7 @@ import {
 } from "@/server/db/schema";
 import { describeDuration, minutesPerDay, type CalendarDefinition } from "@/lib/calendar";
 import { RELATIONSHIP_TYPE_MAP } from "@/lib/relationship-types";
+import { uniqueBy } from "@/lib/utils";
 import { listMysteries } from "./quests";
 
 export interface Insight {
@@ -196,47 +197,82 @@ export async function forgottenThreads(db: DB, worldId: string, campaignId: stri
 // Continuity checker (deterministic part)
 // ---------------------------------------------------------------------------
 
+// Postgres regexes (\\m = start of word), matched against an event's name and summary.
+const DEATH_WORDS = "\\m(kill|died|dies|death|dead|slain|slay|murder|executed|perish|falls|fell|cut down|struck down)";
+const AFTERLIFE_WORDS = "\\m(funeral|burial|buried|mourn|memorial|wake|ghost|spirit|undead|haunt|legacy|remains|corpse|tomb|grave|inherit|avenge|revenge)";
+
 export async function continuityIssues(db: DB, worldId: string, campaignId: string | null, calendar: CalendarDefinition): Promise<Insight[]> {
   const out: Insight[] = [];
 
-  // 1. Dead characters mentioned in sessions after their death.
-  if (campaignId) {
-    const dead = await db
-      .select({ id: entities.id, name: entities.name, type: entities.type, deadSince: campaignEntityStates.updatedAt })
-      .from(campaignEntityStates)
-      .innerJoin(entities, eq(entities.id, campaignEntityStates.entityId))
-      .where(and(eq(campaignEntityStates.campaignId, campaignId), eq(campaignEntityStates.status, "dead")));
+  // 1. Dead characters who still appear in scenes or take part in events after their death.
+  {
+    const dead = campaignId
+      ? await db
+          .select({ id: entities.id, name: entities.name, type: entities.type, deadSince: campaignEntityStates.updatedAt })
+          .from(campaignEntityStates)
+          .innerJoin(entities, eq(entities.id, campaignEntityStates.entityId))
+          .where(and(eq(campaignEntityStates.campaignId, campaignId), eq(campaignEntityStates.status, "dead"), eq(entities.worldId, worldId)))
+      : [];
     const canonDead = await db
       .select({ id: entities.id, name: entities.name, type: entities.type })
       .from(entities)
-      .where(and(eq(entities.worldId, worldId), eq(entities.status, "dead"), inArray(entities.type, ["npc", "pc"])));
-    const all = [...dead, ...canonDead.map((d) => ({ ...d, deadSince: null as Date | null }))];
+      .where(and(eq(entities.worldId, worldId), eq(entities.status, "dead"), inArray(entities.type, ["npc", "pc", "creature"])));
+    const all = uniqueBy([...dead, ...canonDead.map((d) => ({ ...d, deadSince: null as Date | null }))], (d) => d.id);
     if (all.length) {
+      const idList = `{${all.map((a) => a.id).join(",")}}`;
       const deathEvents = await db.execute(sql`
         select r.target_id as entity_id, max(e2.start_at) as died_at
         from relationships r join events e2 on e2.entity_id = r.source_id join entities ev on ev.id = e2.entity_id
-        where r.type = 'involves' and r.target_id = any(${`{${all.map((a) => a.id).join(",")}}`}::uuid[])
-          and (ev.name ilike '%killed%' or ev.name ilike '%died%' or ev.name ilike '%death%' or ev.name ilike '%slain%')
+        where r.type = 'involves' and r.target_id = any(${idList}::uuid[]) and ev.world_id = ${worldId}
+          and (ev.name || ' ' || ev.summary) ~* ${DEATH_WORDS}
         group by r.target_id`);
       const diedAt = new Map(rowsOf<{ entity_id: string; died_at: number }>(deathEvents).map((r) => [r.entity_id, Number(r.died_at)]));
       for (const d of all) {
-        // Scenes in later sessions listing them as present.
-        const present = await db.execute(sql`
-          select s.name as scene, gs.number as session from scene_entities se
-          join scenes s on s.id = se.scene_id left join game_sessions gs on gs.id = s.session_id
-          where se.entity_id = ${d.id} and se.role = 'present' and s.campaign_id = ${campaignId}
-            and (${diedAt.get(d.id) ?? null}::bigint is null or s.at_time > ${diedAt.get(d.id) ?? 0})
-            and (${d.deadSince ? d.deadSince.toISOString() : null}::timestamptz is null or s.created_at > ${d.deadSince ? d.deadSince.toISOString() : new Date(0).toISOString()})
-          limit 3`);
-        const rows = rowsOf<{ scene: string; session: number | null }>(present);
-        if (rows.length) {
+        const died = diedAt.get(d.id) ?? null;
+        const since = d.deadSince ? d.deadSince.toISOString() : null;
+        if (campaignId) {
+          // Scenes in later sessions listing them as present.
+          const present = await db.execute(sql`
+            select s.name as scene, gs.number as session from scene_entities se
+            join scenes s on s.id = se.scene_id left join game_sessions gs on gs.id = s.session_id
+            where se.entity_id = ${d.id} and se.role = 'present' and s.campaign_id = ${campaignId}
+              and (${died}::bigint is null or s.at_time > ${died ?? 0})
+              and (${since}::timestamptz is null or s.created_at > ${since ?? new Date(0).toISOString()}::timestamptz)
+              and (${died}::bigint is not null or ${since}::timestamptz is not null)
+            limit 3`);
+          const rows = rowsOf<{ scene: string; session: number | null }>(present);
+          if (rows.length) {
+            out.push({
+              id: `dead-${d.id}`,
+              kind: "dead_appears",
+              severity: "high",
+              title: `${d.name} is dead but appears in a later scene`,
+              detail: `Present in ${rows.map((r) => `“${r.scene}”${r.session ? ` (session ${r.session})` : ""}`).join(", ")}.`,
+              entityIds: [{ id: d.id, name: d.name, type: d.type }],
+            });
+          }
+        }
+        // Events after the death that list them as taking part (funerals, hauntings and the like are fine).
+        const acting = await db.execute(sql`
+          select ev.id, ev.name from relationships r
+          join events e2 on e2.entity_id = r.source_id join entities ev on ev.id = e2.entity_id
+          where r.type = 'involves' and r.target_id = ${d.id} and ev.world_id = ${worldId} and ev.canon_status <> 'archived'
+            and (ev.campaign_id is null or ${campaignId}::uuid is null or ev.campaign_id = ${campaignId}::uuid)
+            and (ev.name || ' ' || ev.summary) !~* ${DEATH_WORDS} and (ev.name || ' ' || ev.summary) !~* ${AFTERLIFE_WORDS}
+            and (
+              (${died}::bigint is not null and e2.start_at > ${died ?? 0})
+              or (${died}::bigint is null and ${since}::timestamptz is not null and ev.created_at > ${since ?? new Date(0).toISOString()}::timestamptz and e2.origin <> 'manual')
+            )
+          order by e2.start_at limit 3`);
+        const evs = rowsOf<{ id: string; name: string }>(acting);
+        if (evs.length) {
           out.push({
-            id: `dead-${d.id}`,
+            id: `dead-ev-${d.id}`,
             kind: "dead_appears",
             severity: "high",
-            title: `${d.name} is dead but appears in a later scene`,
-            detail: `Present in ${rows.map((r) => `“${r.scene}”${r.session ? ` (session ${r.session})` : ""}`).join(", ")}.`,
-            entityIds: [{ id: d.id, name: d.name, type: d.type }],
+            title: `${d.name} is dead but takes part in later events`,
+            detail: `${evs.map((e) => `“${e.name}”`).join(", ")}. Remove them from the event, or decide they survived.`,
+            entityIds: [{ id: d.id, name: d.name, type: d.type }, ...evs.map((e) => ({ id: e.id, name: e.name, type: "event" }))],
           });
         }
       }

@@ -137,6 +137,8 @@ export const proposalPayloads = {
   advance_clock: z.object({
     fromAt: z.number().int(),
     toAt: z.number().int(),
+    /** Journeys that end inside this span: approving marks them arrived and moves the party. */
+    arrivals: z.array(z.object({ travelId: z.string().uuid(), destinationId: z.string().uuid().nullable(), name: z.string().max(200) })).max(20).optional(),
   }),
   create_note: z.object({
     title: z.string().trim().min(1).max(200),

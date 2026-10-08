@@ -195,7 +195,7 @@ export async function needSomethingNow(db: DB, opts: { worldId: string; campaign
         schema: emergencySchema,
         fast: true,
         maxTokens: 1500,
-        system: `${COPILOT_IDENTITY}\nYou're generating something the DM needs RIGHT NOW at the table. Be quick, concrete and usable immediately. Fit the current scene, location and world.`,
+        system: `${COPILOT_IDENTITY}\nYou're generating something the DM needs RIGHT NOW at the table. Be quick, concrete and usable immediately. Fit the current scene, location and world. In "text", anything the players must not learn (secrets, hidden motives, whether a rumour is true) goes inside a DM block: a line ":::dm", the secret lines, then a line ":::".`,
         messages: [{ role: "user", content: `${ctx.text}\n\n# Task\nGive me one ${opts.kind}${opts.hint ? ` (${opts.hint})` : ""}. Type reference: ${typeReference(["npc", "shop", "tavern", "location", "item", "magic_item"])}` }],
       });
       return { kind: opts.kind, title: out.title, text: out.text, entityType: out.entityType && getEntityType(out.entityType).description !== "Unknown type" ? out.entityType : null, summary: out.summary, fields: Object.fromEntries(out.fields.map((f) => [f.key, f.value])), locationId, provider: provider.name };
@@ -227,7 +227,7 @@ async function offlineEmergency(db: DB, opts: { worldId: string; campaignId: str
       const n = name();
       const occ = rng.pick(B.OCCUPATIONS);
       const fields = { occupation: occ, species: rng.pick(B.SPECIES), personality: rng.pick(B.PERSONALITY), mannerisms: rng.pick(B.MANNERISMS), motivations: rng.pick(B.MOTIVATIONS), appearance: rng.pick(B.APPEARANCE), secrets: rng.pick(B.SECRETS) };
-      return { ...base, title: n, entityType: "npc", summary: `${fields.species} ${occ}`, fields, text: `**${n}**, ${fields.species} ${occ}\n- ${fields.appearance}\n- ${fields.personality}; ${fields.mannerisms}\n- Wants to ${fields.motivations}\n- _Secret:_ ${fields.secrets}` };
+      return { ...base, title: n, entityType: "npc", summary: `${fields.species} ${occ}`, fields, text: `**${n}**, ${fields.species} ${occ}\n- ${fields.appearance}\n- ${fields.personality}; ${fields.mannerisms}\n- Wants to ${fields.motivations}\n\n:::dm\n_Secret:_ ${fields.secrets}\n:::` };
     }
     case "name":
       return { ...base, title: "Names", entityType: null, summary: "", text: Array.from({ length: 6 }, () => `- ${name()}`).join("\n") };
@@ -237,7 +237,7 @@ async function offlineEmergency(db: DB, opts: { worldId: string; campaignId: str
     }
     case "rumour": {
       const r = await roll("rumours", ["Something stirs in the hills."]);
-      return { ...base, title: "Rumour", entityType: "rumour", summary: r, text: `“${r}”\n- True? ${rng.pick(["Mostly", "Partly", "Not at all", "Worse than they say"])}` };
+      return { ...base, title: "Rumour", entityType: "rumour", summary: r, text: `“${r}”\n\n:::dm\nTrue? ${rng.pick(["Mostly", "Partly", "Not at all", "Worse than they say"])}\n:::` };
     }
     case "complication": {
       const c = await roll("complications", B.COMPLICATIONS);

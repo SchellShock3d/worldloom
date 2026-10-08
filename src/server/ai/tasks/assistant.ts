@@ -83,8 +83,18 @@ export async function* assistantTurn(
         return;
       }
     } else {
-      const f = npcCtx.npc.fields as Record<string, string>;
-      full = `_(Offline roleplay notes for ${npcCtx.npc.name})_\n\n**Voice:** ${f.voice || f.mannerisms || "not recorded"}\n**Personality:** ${f.personality || "not recorded"}\n**Wants:** ${f.motivations || f.goals || "not recorded"}\n\n**What they know:**\n${npcCtx.text.split("# What")[1]?.split("\n").slice(1, 10).join("\n") || "- Nothing recorded yet. Add knowledge on their page."}\n\nAdd an Anthropic API key to have the AI speak as this character.`;
+      const f = npcCtx.npc.fields as Record<string, unknown>;
+      const field = (...keys: string[]) => keys.map((k) => f[k]).find((v): v is string => typeof v === "string" && v.trim().length > 0)?.trim() ?? "not recorded";
+      const list = (items: string[], empty: string) => (items.length ? items.slice(0, 8).map((i) => `- ${i}`).join("\n") : `- ${empty}`);
+      full = [
+        `_Offline roleplay notes for ${npcCtx.npc.name}. Add an Anthropic API key to have the AI speak as them._`,
+        `- **Voice:** ${field("voice", "mannerisms")}\n- **Personality:** ${field("personality")}\n- **Wants:** ${field("motivations", "goals")}`,
+        `**What they know**\n${list(npcCtx.knows, "Nothing recorded yet. Add knowledge on their page.")}`,
+        npcCtx.circles.length ? `**Heard within their circles**\n${list(npcCtx.circles, "")}` : "",
+        npcCtx.news.length ? `**Public news they'd have heard**\n${list(npcCtx.news, "")}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n\n");
       yield { type: "text", delta: full };
     }
     const [m] = await db.insert(aiMessages).values({ conversationId: convId, role: "assistant", content: full, contextRefs: [{ id: npcCtx.npc.id, name: npcCtx.npc.name, type: npcCtx.npc.type }] }).returning();

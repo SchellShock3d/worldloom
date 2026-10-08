@@ -107,7 +107,12 @@ export function describeProposal(kind: ProposalKind, p: Record<string, any>, cal
     case "party_inventory":
       return { title: "Party inventory", bullets: [...(p.add ?? []).map((a: string) => `+ ${a}`), ...(p.remove ?? []).map((r: string) => `− ${r}`)], tone: "neutral" };
     case "advance_clock":
-      return { title: `Time passes: ${describeDuration(cal, p.toAt - p.fromAt)}`, detail: `${formatDate(cal, p.fromAt)} → ${formatDate(cal, p.toAt)}`, tone: "brass" };
+      return {
+        title: `Time passes: ${describeDuration(cal, p.toAt - p.fromAt)}`,
+        detail: `${formatDate(cal, p.fromAt)} → ${formatDate(cal, p.toAt)}`,
+        bullets: (p.arrivals ?? []).map((a: { name: string }) => `The party arrives: ${a.name}`),
+        tone: "brass",
+      };
     case "create_note":
       return { title: `Note: ${p.title}`, detail: String(p.body).slice(0, 300), tone: "neutral" };
   }

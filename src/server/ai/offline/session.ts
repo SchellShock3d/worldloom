@@ -37,10 +37,14 @@ function dueDays(line: string): number {
   return 7;
 }
 
-function cleanLine(line: string) {
+/** Strip markdown list/quote markers, quick-log time stamps ("- **18:00** …") and emphasis. */
+export function cleanLine(line: string) {
   return line
     .replace(MENTION_RE, (_m, name: string) => name)
-    .replace(/^[\s>*\-•\d.)]+/, "")
+    .replace(/^[\s>*\-•]+/, "")
+    .replace(/^\d{1,3}[.)]\s+/, "")
+    .replace(/^(?:\*\*|__)?\[?\d{1,2}:\d{2}(?:\s?[ap]\.?m\.?)?\]?(?:\*\*|__)?\s*[-–—:]?\s*/i, "")
+    .replace(/\*\*|__/g, "")
     .replace(/\s+/g, " ")
     .trim();
 }

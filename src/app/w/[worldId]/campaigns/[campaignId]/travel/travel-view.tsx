@@ -36,12 +36,21 @@ export function TravelView({ campaignId, now, plans, places }: { campaignId: str
     if (msg) toast.success(msg);
     router.refresh();
   };
+  const [arriving, setArriving] = React.useState<string | null>(null);
+  const arrive = async (id: string) => {
+    setArriving(id);
+    const res = await arriveTravelAction(w.worldId, campaignId, id);
+    setArriving(null);
+    if (!res.ok) return void toast.error(res.error);
+    toast.success(`The journey takes ${res.data.span}. Review what happens on the way, then approve to arrive.`);
+    router.push(`/w/${w.worldId}/proposals/${res.data.batchId}`);
+  };
   return (
     <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 lg:px-8">
       <PageHeader
         icon={<Route />}
         title="Travel"
-        description="Plan journeys: distance, method and terrain give an estimated duration. Arriving moves the clock and the party; for long trips, Advance World simulates what happens meanwhile."
+        description="Plan journeys: distance, method and terrain give an estimated duration. Travelling lets that time pass through Advance World, so you review what happens on the road before the party arrives."
         actions={
           <Button variant="primary" onClick={() => setEditing("new")}>
             <Plus /> Plan a journey
@@ -84,8 +93,8 @@ export function TravelView({ campaignId, now, plans, places }: { campaignId: str
                     </Button>
                   )}
                   {p.status !== "arrived" && (
-                    <Button size="sm" variant="primary" onClick={() => act(arriveTravelAction(w.worldId, campaignId, p.id), "Arrived")}>
-                      <MapPinned /> Arrive now
+                    <Button size="sm" variant="primary" loading={arriving === p.id} disabled={!!arriving} onClick={() => arrive(p.id)}>
+                      <MapPinned /> Travel there
                     </Button>
                   )}
                   <Button size="sm" variant="ghost" onClick={() => setEditing(p)}>

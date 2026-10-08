@@ -1,7 +1,7 @@
-import { and, asc, desc, eq, inArray, max, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, max, or, sql } from "drizzle-orm";
 import type { DB } from "@/server/db/client";
 import { assertOwned } from "@/server/auth/ownership";
-import { campaigns, entities, gameSessions, sceneEntities, scenes, type GameSession, type Scene } from "@/server/db/schema";
+import { campaigns, encounters, entities, gameSessions, sceneEntities, scenes, type GameSession, type Scene } from "@/server/db/schema";
 import { resolvePlainMentions } from "@/lib/mentions";
 import { getNameIndex, recordRevision, syncMentions, type Actor } from "./history";
 
@@ -81,6 +81,11 @@ export async function getOrCreateLiveSession(db: DB, worldId: string, campaignId
 export async function endSession(db: DB, worldId: string, campaignId: string, actor: Actor, sessionId: string) {
   const [c] = await db.select({ currentAt: campaigns.currentAt }).from(campaigns).where(eq(campaigns.id, campaignId));
   const row = await updateSession(db, worldId, campaignId, sessionId, { status: "completed", endedAt: new Date(), inWorldEndAt: c?.currentAt ?? null });
+  // Combat doesn't outlive the session: close any fight still running in this campaign.
+  await db
+    .update(encounters)
+    .set({ status: "completed" })
+    .where(and(eq(encounters.worldId, worldId), eq(encounters.status, "active"), or(eq(encounters.campaignId, campaignId), isNull(encounters.campaignId))));
   await recordRevision(db, actor, { worldId, campaignId, targetKind: "session", targetId: sessionId, targetLabel: `Session ${row.number}`, action: "update", summary: `Session ${row.number} ended` });
   return row;
 }
