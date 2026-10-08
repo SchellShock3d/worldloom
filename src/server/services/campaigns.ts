@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import type { DB } from "@/server/db/client";
+import { assertOwned } from "@/server/auth/ownership";
 import { campaignEntityStates, campaigns, entities, scenes, worlds, type Campaign } from "@/server/db/schema";
 import { campaignInput, campaignPatch, campaignStateInput, parsePatch, type CampaignInput, type CampaignPatchInput, type CampaignStateInput } from "@/lib/validation";
 import { diffRecords, recordRevision, type Actor } from "./history";
@@ -86,6 +87,7 @@ export async function setCampaignEntityState(db: DB, worldId: string, campaignId
   const input = campaignStateInput.parse(raw);
   const [ent] = await db.select({ id: entities.id, name: entities.name }).from(entities).where(and(eq(entities.id, input.entityId), eq(entities.worldId, worldId)));
   if (!ent) throw new Error("Entity not found");
+  await assertOwned(db, worldId, { campaigns: [campaignId], entities: [input.locationId] });
   const [before] = await db
     .select()
     .from(campaignEntityStates)
@@ -151,11 +153,11 @@ export async function listReputations(db: DB, campaignId: string) {
     .orderBy(desc(campaignEntityStates.reputation));
 }
 
-export async function listPartyMembers(db: DB, campaignId: string) {
+export async function listPartyMembers(db: DB, worldId: string, campaignId: string) {
   return db
     .select()
     .from(entities)
-    .where(and(eq(entities.campaignId, campaignId), eq(entities.type, "pc")))
+    .where(and(eq(entities.worldId, worldId), eq(entities.campaignId, campaignId), eq(entities.type, "pc")))
     .orderBy(asc(entities.name));
 }
 

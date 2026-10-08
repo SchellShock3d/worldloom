@@ -2,7 +2,7 @@ import { and, desc, eq, inArray, sql, count, max } from "drizzle-orm";
 import type { DB } from "@/server/db/client";
 import { calendars, campaigns, entities, randomTableEntries, randomTables, worldMembers, worlds, gameSessions } from "@/server/db/schema";
 import { CALENDAR_PRESETS, DEFAULT_CALENDAR, toAbsolute, type CalendarDefinition } from "@/lib/calendar";
-import { worldInput, type WorldInput, parsePatch } from "@/lib/validation";
+import { worldInput, worldSettingsInput, type WorldInput, parsePatch } from "@/lib/validation";
 import { DEFAULT_RANDOM_TABLES } from "./default-tables";
 import { recordRevision, type Actor } from "./history";
 
@@ -105,7 +105,7 @@ export async function updateWorld(db: DB, actor: Actor, worldId: string, patch: 
   for (const k of ["name", "genre", "tone", "magicLevel", "techLevel", "description"] as const) {
     if (parsed[k] !== undefined) values[k] = parsed[k] as string;
   }
-  if (patch.settings) values.settings = { ...before.settings, ...patch.settings };
+  if (patch.settings) values.settings = { ...before.settings, ...worldSettingsInput.parse(patch.settings) };
   const [after] = await db.update(worlds).set(values).where(eq(worlds.id, worldId)).returning();
   await recordRevision(db, actor, {
     worldId,

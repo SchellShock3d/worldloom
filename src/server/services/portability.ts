@@ -134,11 +134,15 @@ export interface WorldExport {
   fileData: Record<string, string>;
 }
 
-export async function exportWorld(db: DB, worldId: string, opts: { includeFiles?: boolean } = {}): Promise<WorldExport> {
+export async function exportWorld(db: DB, worldId: string, opts: { includeFiles?: boolean; userId?: string } = {}): Promise<WorldExport> {
   const tables: Record<string, Record<string, unknown>[]> = {};
   for (const { table, scope, via } of TABLES) {
     const m = meta(table);
-    const rows = (await db.select().from(table).where(scopeWhere(scope, via, worldId))) as Record<string, unknown>[];
+    let where = scopeWhere(scope, via, worldId);
+    // AI chats are private to their author: export only the requesting user's.
+    if (m.name === "ai_conversations") where = opts.userId ? sql`${where} and user_id = ${opts.userId}` : sql`false`;
+    if (m.name === "ai_messages") where = opts.userId ? sql`conversation_id in (select id from ai_conversations where world_id = ${worldId} and user_id = ${opts.userId})` : sql`false`;
+    const rows = (await db.select().from(table).where(where)) as Record<string, unknown>[];
     tables[m.name] = rows.map((r) => {
       const out = { ...r };
       for (const g of m.generated) delete out[g];
@@ -200,6 +204,7 @@ export async function importWorld(db: DB, userId: string, raw: unknown, opts: { 
 
   // 2. Re-point every id-shaped string (columns, JSON payloads, @mention tokens in markdown).
   const remapped = JSON.parse(JSON.stringify(src).replace(UUID_RE, (m) => idMap.get(m.toLowerCase()) ?? m)) as Record<string, unknown>;
+  const allNew = new Set([...planned.values()].flatMap((x) => [...x]));
 
   const counts: Record<string, number> = {};
   let skipped = 0;
@@ -248,6 +253,8 @@ export async function importWorld(db: DB, userId: string, raw: unknown, opts: { 
           if (fk.nullable) row[fk.key] = null;
           else drop = true;
         }
+        // mentions.source_id isn't a declared foreign key: it must still point at something we imported.
+        if (!drop && m.name === "mentions" && !allNew.has(String(row.sourceId))) drop = true;
         if (drop) {
           skipped++;
           continue;

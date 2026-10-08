@@ -11,7 +11,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ worl
   const auth = await apiWorld(worldId, "editor");
   if ("error" in auth) return auth.error;
   const includeFiles = req.nextUrl.searchParams.get("files") !== "0";
-  const dump = await exportWorld(auth.db, worldId, { includeFiles });
+  const dump = await exportWorld(auth.db, worldId, { includeFiles, userId: auth.user.id });
   const name = `${slugify(dump.worldName) || "world"}-${new Date().toISOString().slice(0, 10)}.worldloom.json`;
   return new NextResponse(JSON.stringify(dump), {
     headers: {

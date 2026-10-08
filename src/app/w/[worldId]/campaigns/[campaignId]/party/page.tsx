@@ -16,7 +16,7 @@ export default async function PartyPage({ params }: { params: Promise<{ worldId:
   const { worldId, campaignId } = await params;
   const { campaign } = await requireCampaign(worldId, campaignId);
   const db = await getDb();
-  const [pcs, reps, known] = await Promise.all([listPartyMembers(db, campaign.id), listReputations(db, campaign.id), getPlayerKnownEntities(db, worldId, campaign.id)]);
+  const [pcs, reps, known] = await Promise.all([listPartyMembers(db, worldId, campaign.id), listReputations(db, campaign.id), getPlayerKnownEntities(db, worldId, campaign.id)]);
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
       <PageHeader

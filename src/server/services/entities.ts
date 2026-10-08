@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, ilike, inArray, isNull, ne, or, sql, type SQL } from "drizzle-orm";
 import type { DB } from "@/server/db/client";
+import { assertOwned } from "@/server/auth/ownership";
 import {
   customEntityTypes,
   entities,
@@ -77,13 +78,16 @@ async function setTags(db: DB, worldId: string, entityId: string, names: string[
 export interface CreateEntityOptions {
   /** Skip @Name → token resolution (e.g. bulk import). */
   skipMentionResolution?: boolean;
+  /** Reuse a known id (restoring a deleted entry from history). */
+  id?: string;
 }
 
 export async function createEntity(db: DB, worldId: string, actor: Actor, raw: EntityInput, opts: CreateEntityOptions = {}): Promise<Entity> {
   const input = entityInput.parse(raw);
   const def = await resolveType(db, worldId, input.type);
   if (def.campaignScoped && !input.campaignId) throw new EntityError(`${def.label}s must belong to a campaign.`);
-  await assertSameWorld(db, worldId, [input.locationId, input.parentId]);
+  await assertSameWorld(db, worldId, [input.locationId, input.parentId, input.rumour?.originEventId]);
+  await assertOwned(db, worldId, { campaigns: [input.campaignId], files: [input.imageFileId], sessions: [input.event?.sessionId] });
 
   let body = input.body;
   let dmNotes = input.dmNotes;
@@ -97,6 +101,7 @@ export async function createEntity(db: DB, worldId: string, actor: Actor, raw: E
   const [row] = await db
     .insert(entities)
     .values({
+      ...(opts.id && { id: opts.id }),
       worldId,
       campaignId: input.campaignId ?? null,
       type: def.key,
@@ -187,7 +192,8 @@ export async function updateEntity(db: DB, worldId: string, actor: Actor, entity
   if (!before) throw new EntityError("Entity not found");
   const def = await resolveType(db, worldId, before.type);
   if (patch.locationId === entityId || patch.parentId === entityId) throw new EntityError("An entity can't contain itself.");
-  await assertSameWorld(db, worldId, [patch.locationId, patch.parentId]);
+  await assertSameWorld(db, worldId, [patch.locationId, patch.parentId, patch.rumour?.originEventId]);
+  await assertOwned(db, worldId, { files: [patch.imageFileId], sessions: [patch.event?.sessionId] });
   if (patch.locationId) await assertNoCycle(db, entityId, patch.locationId, "locationId");
   if (patch.parentId) await assertNoCycle(db, entityId, patch.parentId, "parentId");
 
@@ -350,6 +356,9 @@ async function updateExtension(db: DB, worldId: string, def: EntityTypeDef, enti
 export async function deleteEntity(db: DB, worldId: string, actor: Actor, entityId: string) {
   const [before] = await db.select().from(entities).where(and(eq(entities.id, entityId), eq(entities.worldId, worldId)));
   if (!before) throw new EntityError("Entity not found");
+  // Keep enough to restore the entry exactly: its extension row and tags.
+  const extension = await extensionSnapshot(db, before.type, entityId);
+  const tagNames = (await getEntityTags(db, entityId)).map((t) => t.name);
   await db.delete(entities).where(eq(entities.id, entityId));
   await recordRevision(db, actor, {
     worldId,
@@ -359,9 +368,42 @@ export async function deleteEntity(db: DB, worldId: string, actor: Actor, entity
     targetLabel: before.name,
     action: "delete",
     summary: `Deleted ${before.type} "${before.name}"`,
-    before: snapshot(before),
+    before: { ...snapshot(before), ...extension, tags: tagNames },
   });
   return before;
+}
+
+/** The extension row of an entity in the same shape `createEntity` accepts. */
+async function extensionSnapshot(db: DB, type: string, entityId: string): Promise<Record<string, unknown>> {
+  const def = getEntityType(type);
+  switch (def.extension) {
+    case "quest": {
+      const [q] = await db.select().from(quests).where(eq(quests.entityId, entityId));
+      if (!q) return {};
+      const objectives = await db.select().from(questObjectives).where(eq(questObjectives.questId, entityId)).orderBy(asc(questObjectives.position));
+      return { quest: questExtension.parse({ ...q, objectives: objectives.map((o) => ({ text: o.text, status: o.status, hidden: o.hidden })) }) };
+    }
+    case "thread": {
+      const [t] = await db.select().from(worldThreads).where(eq(worldThreads.entityId, entityId));
+      if (!t) return {};
+      const stages = await db.select().from(threadStages).where(eq(threadStages.threadId, entityId)).orderBy(asc(threadStages.position));
+      return { thread: threadExtension.parse({ ...t, stages: stages.map((x) => ({ title: x.title, description: x.description })) }) };
+    }
+    case "mystery": {
+      const [m] = await db.select().from(mysteries).where(eq(mysteries.entityId, entityId));
+      return m ? { mystery: mysteryExtension.parse(m) } : {};
+    }
+    case "rumour": {
+      const [r] = await db.select().from(rumours).where(eq(rumours.entityId, entityId));
+      return r ? { rumour: rumourExtension.parse(r) } : {};
+    }
+    case "event": {
+      const [e] = await db.select().from(events).where(eq(events.entityId, entityId));
+      return e ? { event: eventExtension.parse(e) } : {};
+    }
+    default:
+      return {};
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -466,11 +508,11 @@ export async function listTags(db: DB, worldId: string) {
 }
 
 /** Breadcrumb of containing locations, outermost first. */
-export async function getLocationChain(db: DB, locationId: string | null) {
+export async function getLocationChain(db: DB, worldId: string, locationId: string | null) {
   const chain: { id: string; name: string; type: string }[] = [];
   let current = locationId;
   for (let i = 0; current && i < 12; i++) {
-    const [row] = await db.select({ id: entities.id, name: entities.name, type: entities.type, next: entities.locationId }).from(entities).where(eq(entities.id, current));
+    const [row] = await db.select({ id: entities.id, name: entities.name, type: entities.type, next: entities.locationId }).from(entities).where(and(eq(entities.id, current), eq(entities.worldId, worldId)));
     if (!row) break;
     chain.unshift({ id: row.id, name: row.name, type: row.type });
     current = row.next;

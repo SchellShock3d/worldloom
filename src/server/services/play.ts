@@ -2,6 +2,7 @@
 import { and, asc, desc, eq, inArray, isNull, or } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { DB } from "@/server/db/client";
+import { assertOwned } from "@/server/auth/ownership";
 import { campaigns, clueKnowers, clues, consequences, entities, notes, type Consequence } from "@/server/db/schema";
 import { clueInput, consequenceInput, type ClueInput, type ConsequenceInput, parsePatch } from "@/lib/validation";
 import { getNameIndex, recordRevision, syncMentions, type Actor } from "./history";
@@ -9,6 +10,7 @@ import { resolvePlainMentions } from "@/lib/mentions";
 
 export async function createConsequence(db: DB, worldId: string, campaignId: string | null, actor: Actor, raw: ConsequenceInput): Promise<Consequence> {
   const input = consequenceInput.parse(raw);
+  await assertOwned(db, worldId, { campaigns: [campaignId], entities: [input.actorId, input.causeEventId], sessions: [input.sessionId] });
   const index = await getNameIndex(db, worldId, campaignId);
   const description = resolvePlainMentions(input.description, index);
   const [row] = await db
@@ -45,6 +47,7 @@ export async function updateConsequence(db: DB, worldId: string, actor: Actor, i
   const [before] = await db.select().from(consequences).where(and(eq(consequences.id, id), eq(consequences.worldId, worldId)));
   if (!before) throw new Error("Consequence not found");
   const p = parsePatch(consequenceInput.partial(), patch);
+  await assertOwned(db, worldId, { entities: [p.actorId, p.causeEventId], sessions: [p.sessionId] });
   const [after] = await db.update(consequences).set(p).where(eq(consequences.id, id)).returning();
   if (p.description !== undefined || p.title !== undefined) await syncMentions(db, worldId, "consequence", id, after!.description, after!.title);
   if (p.status && p.status !== before.status)
@@ -71,7 +74,7 @@ export async function listConsequences(db: DB, worldId: string, campaignId?: str
   return db
     .select({ c: consequences, actorName: actorE.name, actorType: actorE.type })
     .from(consequences)
-    .leftJoin(actorE, eq(actorE.id, consequences.actorId))
+    .leftJoin(actorE, and(eq(actorE.id, consequences.actorId), eq(actorE.worldId, worldId)))
     .where(
       and(
         eq(consequences.worldId, worldId),
@@ -88,6 +91,7 @@ export async function listConsequences(db: DB, worldId: string, campaignId?: str
 
 export async function createClue(db: DB, worldId: string, campaignId: string | null, actor: Actor, raw: ClueInput) {
   const input = clueInput.parse(raw);
+  await assertOwned(db, worldId, { campaigns: [campaignId], entities: [input.mysteryId, input.questId, input.locationId, input.sourceEntityId] });
   const [row] = await db
     .insert(clues)
     .values({
@@ -112,6 +116,7 @@ export async function updateClue(db: DB, worldId: string, actor: Actor, id: stri
   const [before] = await db.select().from(clues).where(and(eq(clues.id, id), eq(clues.worldId, worldId)));
   if (!before) throw new Error("Clue not found");
   const p = parsePatch(clueInput.partial(), patch);
+  await assertOwned(db, worldId, { entities: [p.mysteryId, p.questId, p.locationId, p.sourceEntityId] });
   const [after] = await db.update(clues).set(p).where(eq(clues.id, id)).returning();
   if (p.description !== undefined) await syncMentions(db, worldId, "clue", id, after!.description);
   return after!;
@@ -120,6 +125,7 @@ export async function updateClue(db: DB, worldId: string, actor: Actor, id: stri
 export async function setClueDiscovered(db: DB, worldId: string, actor: Actor, clueId: string, discovered: boolean, opts: { sessionId?: string | null; knowerIds?: string[] } = {}) {
   const [before] = await db.select().from(clues).where(and(eq(clues.id, clueId), eq(clues.worldId, worldId)));
   if (!before) throw new Error("Clue not found");
+  await assertOwned(db, worldId, { entities: opts.knowerIds, sessions: [opts.sessionId] });
   let at: number | null = null;
   if (discovered && before.campaignId) {
     const [c] = await db.select({ currentAt: campaigns.currentAt }).from(campaigns).where(eq(campaigns.id, before.campaignId));
@@ -151,13 +157,13 @@ export async function deleteClue(db: DB, worldId: string, id: string) {
   await db.delete(clues).where(and(eq(clues.id, id), eq(clues.worldId, worldId)));
 }
 
-export async function getClueKnowers(db: DB, clueIds: string[]) {
+export async function getClueKnowers(db: DB, worldId: string, clueIds: string[]) {
   if (!clueIds.length) return [];
   return db
     .select({ clueId: clueKnowers.clueId, id: entities.id, name: entities.name })
     .from(clueKnowers)
     .innerJoin(entities, eq(entities.id, clueKnowers.entityId))
-    .where(inArray(clueKnowers.clueId, clueIds));
+    .where(and(eq(entities.worldId, worldId), inArray(clueKnowers.clueId, clueIds)));
 }
 
 // ---------------------------------------------------------------------------
@@ -165,6 +171,7 @@ export async function getClueKnowers(db: DB, clueIds: string[]) {
 // ---------------------------------------------------------------------------
 
 export async function saveNote(db: DB, worldId: string, campaignId: string | null, userId: string, input: { id?: string; title: string; body: string; pinned?: boolean }) {
+  await assertOwned(db, worldId, { campaigns: [campaignId] });
   const index = await getNameIndex(db, worldId, campaignId);
   const body = resolvePlainMentions(input.body, index);
   let id = input.id;

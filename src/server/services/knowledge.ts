@@ -5,17 +5,14 @@
 import { and, asc, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { DB } from "@/server/db/client";
+import { assertOwned } from "@/server/auth/ownership";
 import { campaignEntityStates, entities, facts, type Fact } from "@/server/db/schema";
 import { factInput, type FactInput, parsePatch } from "@/lib/validation";
 import { diffRecords, recordRevision, type Actor } from "./history";
 
 export async function createFact(db: DB, worldId: string, actor: Actor, raw: FactInput): Promise<Fact> {
   const input = factInput.parse(raw);
-  const ids = [input.holderId, input.subjectId, input.sourceEntityId].filter((x): x is string => !!x);
-  if (ids.length) {
-    const found = await db.select({ id: entities.id }).from(entities).where(and(eq(entities.worldId, worldId), inArray(entities.id, ids)));
-    if (found.length !== new Set(ids).size) throw new Error("Fact references an entity outside this world.");
-  }
+  await assertOwned(db, worldId, { entities: [input.holderId, input.subjectId, input.sourceEntityId], campaigns: [input.campaignId], facts: [input.truthRefId], sessions: [input.learnedSessionId] });
   const [row] = await db
     .insert(facts)
     .values({
@@ -56,6 +53,7 @@ export async function updateFact(db: DB, worldId: string, actor: Actor, id: stri
   const [before] = await db.select().from(facts).where(and(eq(facts.id, id), eq(facts.worldId, worldId)));
   if (!before) throw new Error("Fact not found");
   const patch = parsePatch(factInput.partial(), raw);
+  await assertOwned(db, worldId, { entities: [patch.holderId, patch.subjectId, patch.sourceEntityId], campaigns: [patch.campaignId], facts: [patch.truthRefId], sessions: [patch.learnedSessionId] });
   const [after] = await db.update(facts).set(patch).where(eq(facts.id, id)).returning();
   const d = diffRecords(before as unknown as Record<string, unknown>, after as unknown as Record<string, unknown>, Object.keys(patch));
   if (d.changed.length)

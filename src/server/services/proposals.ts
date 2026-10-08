@@ -177,10 +177,19 @@ export async function applyProposals(db: DB, worldId: string, batchId: string, i
     if (!ids.includes(item.id) || item.status !== "pending") continue;
     try {
       const refs = await db.transaction(async (tx) => {
+        // Claim the proposal first so a double-click or a second reviewer can't apply it twice.
+        const claimed = await tx
+          .update(proposals)
+          .set({ status: "applied", appliedAt: new Date(), appliedBy: approverId, error: null })
+          .where(and(eq(proposals.id, item.id), eq(proposals.status, "pending")))
+          .returning({ id: proposals.id });
+        if (!claimed.length) return null;
         const actor: Actor = { type: "ai", userId: approverId, proposalId: item.id };
-        return applyOne(tx, { worldId, campaignId: b.batch.campaignId, sessionId: b.batch.sessionId, actor, refMap }, item);
+        const out = await applyOne(tx, { worldId, campaignId: b.batch.campaignId, sessionId: b.batch.sessionId, actor, refMap }, item);
+        await tx.update(proposals).set({ resultRefs: out }).where(eq(proposals.id, item.id));
+        return out;
       });
-      await db.update(proposals).set({ status: "applied", appliedAt: new Date(), appliedBy: approverId, resultRefs: refs, error: null }).where(eq(proposals.id, item.id));
+      if (!refs) continue; // already applied or rejected elsewhere
       for (const r of refs) if (r.label?.startsWith("ref:")) refMap.set(r.label.slice(4), r.id);
       result.applied++;
     } catch (err) {

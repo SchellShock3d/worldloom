@@ -57,6 +57,12 @@ export const worldInput = z.object({
 });
 export type WorldInput = z.infer<typeof worldInput>;
 
+/** Per-world AI and style settings (stored as JSON on the world). */
+export const worldSettingsInput = z.object({
+  aiCreativity: z.enum(["grounded", "balanced", "inventive"]).optional(),
+  houseRules: z.string().max(4000).optional(),
+});
+
 export const campaignInput = z.object({
   name: z.string().trim().min(1, "Give your campaign a name").max(120),
   premise: z.string().trim().max(5000).default(""),

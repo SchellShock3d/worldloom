@@ -8,7 +8,7 @@ const nextConfig: NextConfig = {
   experimental: {
     serverActions: { bodySizeLimit: "25mb" },
     // The auth middleware runs on uploads and imports; don't truncate large bodies.
-    middlewareClientMaxBodySize: "210mb",
+    middlewareClientMaxBodySize: "110mb",
   },
   poweredByHeader: false,
   devIndicators: false,

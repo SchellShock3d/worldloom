@@ -3,7 +3,7 @@
  * season (from the calendar) + date seed → a stable description. The DM can
  * override it on the campaign (weatherLocked).
  */
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { DB } from "@/server/db/client";
 import { entities } from "@/server/db/schema";
 import { resolve, type CalendarDefinition } from "@/lib/calendar";
@@ -22,10 +22,10 @@ export function weatherFor(calendar: CalendarDefinition, at: number, climate: st
 }
 
 /** Walk up the location chain to find a climate field. */
-export async function climateAt(db: DB, locationId: string | null): Promise<string> {
+export async function climateAt(db: DB, worldId: string, locationId: string | null): Promise<string> {
   let current = locationId;
   for (let i = 0; current && i < 10; i++) {
-    const [row] = await db.select({ fields: entities.fields, next: entities.locationId }).from(entities).where(eq(entities.id, current));
+    const [row] = await db.select({ fields: entities.fields, next: entities.locationId }).from(entities).where(and(eq(entities.id, current), eq(entities.worldId, worldId)));
     if (!row) break;
     const c = (row.fields as { climate?: string }).climate;
     if (c) return c;

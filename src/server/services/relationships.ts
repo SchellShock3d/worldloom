@@ -1,6 +1,7 @@
 import { and, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { DB } from "@/server/db/client";
+import { assertOwned } from "@/server/auth/ownership";
 import { entities, relationships, type Relationship } from "@/server/db/schema";
 import { normalizeRelationshipType, relationshipLabel, RELATIONSHIP_TYPE_MAP } from "@/lib/relationship-types";
 import { relationshipInput, type RelationshipInput, parsePatch } from "@/lib/validation";
@@ -16,6 +17,7 @@ export async function createRelationship(db: DB, worldId: string, actor: Actor, 
     .from(entities)
     .where(and(eq(entities.worldId, worldId), inArray(entities.id, [input.sourceId, input.targetId])));
   if (ends.length !== 2) throw new RelationshipError("Both entities must exist in this world.");
+  await assertOwned(db, worldId, { campaigns: [input.campaignId] });
   const type = normalizeRelationshipType(input.type);
   if (!type) throw new RelationshipError("Relationship type is required.");
 

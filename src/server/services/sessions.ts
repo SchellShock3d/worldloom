@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, inArray, max, sql } from "drizzle-orm";
 import type { DB } from "@/server/db/client";
+import { assertOwned } from "@/server/auth/ownership";
 import { campaigns, entities, gameSessions, sceneEntities, scenes, type GameSession, type Scene } from "@/server/db/schema";
 import { resolvePlainMentions } from "@/lib/mentions";
 import { getNameIndex, recordRevision, syncMentions, type Actor } from "./history";
@@ -117,6 +118,11 @@ export async function saveScene(db: DB, worldId: string, campaignId: string, inp
     const found = await db.select({ id: entities.id }).from(entities).where(and(eq(entities.worldId, worldId), inArray(entities.id, idsToCheck)));
     if (found.length !== new Set(idsToCheck).size) throw new Error("A scene reference is not in this world.");
   }
+  await assertOwned(db, worldId, { encounters: [input.encounterId], profiles: [input.audioProfileId], sessions: [input.sessionId] });
+  if (input.sessionId) {
+    const [own] = await db.select({ id: gameSessions.id }).from(gameSessions).where(and(eq(gameSessions.id, input.sessionId), eq(gameSessions.campaignId, campaignId)));
+    if (!own) throw new Error("That session belongs to another campaign.");
+  }
   const index = await getNameIndex(db, worldId, campaignId);
   const values = {
     name: input.name,
@@ -175,9 +181,11 @@ export type SceneWithEntities = Awaited<ReturnType<typeof listScenes>>[number];
 
 export async function activateScene(db: DB, campaignId: string, sceneId: string | null) {
   if (sceneId) {
+    // The scene must belong to this campaign; never follow an id from elsewhere.
+    const [s] = await db.select({ locationId: scenes.locationId }).from(scenes).where(and(eq(scenes.id, sceneId), eq(scenes.campaignId, campaignId)));
+    if (!s) throw new Error("Scene not found");
     await db.update(scenes).set({ status: "done" }).where(and(eq(scenes.campaignId, campaignId), eq(scenes.status, "active")));
     await db.update(scenes).set({ status: "active" }).where(and(eq(scenes.id, sceneId), eq(scenes.campaignId, campaignId)));
-    const [s] = await db.select({ locationId: scenes.locationId }).from(scenes).where(eq(scenes.id, sceneId));
     await db
       .update(campaigns)
       .set({ activeSceneId: sceneId, ...(s?.locationId ? { currentLocationId: s.locationId } : {}) })

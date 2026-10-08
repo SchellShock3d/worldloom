@@ -32,7 +32,7 @@ export default async function CampaignDashboard({ params }: { params: Promise<{ 
   const base = `/w/${worldId}`;
   const cb = `${base}/campaigns/${c.id}`;
   const [party, quests, mysteries, threads, sessions, reps, upcoming, forgotten, ub, known, chain, pending] = await Promise.all([
-    listPartyMembers(db, c.id),
+    listPartyMembers(db, worldId, c.id),
     listQuests(db, worldId, c.id, ["active", "available"]),
     listMysteries(db, worldId, c.id),
     listThreads(db, worldId, { statuses: ["escalating", "active"] }),
@@ -42,7 +42,7 @@ export default async function CampaignDashboard({ params }: { params: Promise<{ 
     forgottenThreads(db, worldId, c.id, calendar),
     unfinishedBusiness(db, worldId, c.id),
     getPlayerKnownEntities(db, worldId, c.id),
-    getLocationChain(db, c.currentLocationId),
+    getLocationChain(db, worldId, c.currentLocationId),
     listConsequences(db, worldId, c.id, ["pending", "foreshadowed"]),
   ]);
   const importantIds = ub.map((u) => u.id).slice(0, 8);

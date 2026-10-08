@@ -245,7 +245,7 @@ export async function listMysteries(db: DB, worldId: string, campaignId?: string
   const cl = await db
     .select()
     .from(clues)
-    .where(and(inArray(clues.mysteryId, rows.map((r) => r.id)), campaignId ? or(isNull(clues.campaignId), eq(clues.campaignId, campaignId)) : undefined))
+    .where(and(eq(clues.worldId, worldId), inArray(clues.mysteryId, rows.map((r) => r.id)), campaignId ? or(isNull(clues.campaignId), eq(clues.campaignId, campaignId)) : undefined))
     .orderBy(asc(clues.position), asc(clues.createdAt));
   return rows.map((r) => ({ ...r, clues: cl.filter((c) => c.mysteryId === r.id) }));
 }

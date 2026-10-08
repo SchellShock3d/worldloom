@@ -203,7 +203,7 @@ export async function entityCard(
   const meta: string[] = [];
   if (status) meta.push(`status: ${status}`);
   if (locationId) {
-    const [loc] = await db.select({ name: entities.name, id: entities.id }).from(entities).where(eq(entities.id, locationId));
+    const [loc] = await db.select({ name: entities.name, id: entities.id }).from(entities).where(and(eq(entities.id, locationId), eq(entities.worldId, worldId)));
     if (loc) meta.push(`located in: ${loc.name} ${idTag(loc)}`);
   }
   if (e.aliases.length) meta.push(`aka ${e.aliases.join(", ")}`);
@@ -284,13 +284,13 @@ export async function campaignSection(db: DB, b: WorldBundle): Promise<string> {
   }
   if (c.partyInventory.trim()) parts.push(`Party inventory: ${truncate(c.partyInventory.replace(/\n/g, "; "), 400)}`);
   if (c.activeSceneId) {
-    const [s] = await db.select().from(scenes).where(eq(scenes.id, c.activeSceneId));
+    const [s] = await db.select().from(scenes).where(and(eq(scenes.id, c.activeSceneId), eq(scenes.campaignId, c.id)));
     if (s) {
       const present = await db
         .select({ id: entities.id, name: entities.name, type: entities.type })
         .from(sceneEntities)
         .innerJoin(entities, eq(entities.id, sceneEntities.entityId))
-        .where(eq(sceneEntities.sceneId, s.id));
+        .where(and(eq(sceneEntities.sceneId, s.id), eq(entities.worldId, c.worldId)));
       parts.push(
         `Active scene: “${s.name}”${s.mood ? ` · mood: ${s.mood}` : ""}${s.lighting ? ` · lighting: ${s.lighting}` : ""}${s.weather ? ` · weather: ${s.weather}` : ""}\n${truncate(mentionsToPlain(s.description), 400)}${
           present.length ? `\nPresent: ${present.map((p) => `${p.name} ${idTag(p)}`).join(", ")}` : ""

@@ -45,7 +45,7 @@ export default async function EntityPage({ params }: { params: Promise<{ worldId
   const def = d.typeDef;
   const base = `/w/${worldId}`;
   const ext = d.extension;
-  const clueKnowers = ext && "clues" in ext && ext.clues ? await getClueKnowers(db, ext.clues.map((c) => c.id)) : [];
+  const clueKnowers = ext && "clues" in ext && ext.clues ? await getClueKnowers(db, worldId, ext.clues.map((c) => c.id)) : [];
   const statusOverride = d.overlay?.status;
   const canHoldKnowledge = ["npc", "pc", "faction", "organization", "religion", "deity", "creature"].includes(entity.type);
 

@@ -15,10 +15,10 @@ export async function getRunData(db: DB, worldId: string, campaign: Campaign) {
   const planned = [...sessions].reverse().filter((s) => s.status === "planned");
   const [scenes, party, quests, mysteries, chain, encounterRows, tables, tracks, profiles] = await Promise.all([
     listScenes(db, campaign.id),
-    listPartyMembers(db, campaign.id),
+    listPartyMembers(db, worldId, campaign.id),
     listQuests(db, worldId, campaign.id, ["active", "available"]),
     listMysteries(db, worldId, campaign.id),
-    getLocationChain(db, campaign.currentLocationId),
+    getLocationChain(db, worldId, campaign.currentLocationId),
     db.select().from(encounters).where(and(eq(encounters.worldId, worldId), or(isNull(encounters.campaignId), eq(encounters.campaignId, campaign.id)), inArray(encounters.status, ["ready", "active", "draft"]))).orderBy(desc(encounters.updatedAt)),
     db.select().from(randomTables).where(eq(randomTables.worldId, worldId)).orderBy(asc(randomTables.name)),
     db.select().from(audioTracks).where(eq(audioTracks.worldId, worldId)).orderBy(asc(audioTracks.name)),

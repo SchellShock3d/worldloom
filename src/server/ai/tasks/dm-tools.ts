@@ -75,7 +75,7 @@ async function offlineBriefing(db: DB, worldId: string, campaignId: string, bund
   const camp = bundle.campaign!;
   const L = (e: { id: string; name: string }) => mentionToken(e.name, e.id);
   const md: string[] = [];
-  const chain = await getLocationChain(db, camp.currentLocationId);
+  const chain = await getLocationChain(db, worldId, camp.currentLocationId);
   const here = chain[chain.length - 1];
   const pcs = await db.select().from(entities).where(and(eq(entities.campaignId, campaignId), eq(entities.type, "pc")));
   md.push("## Current situation");

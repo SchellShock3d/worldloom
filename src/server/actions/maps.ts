@@ -38,6 +38,13 @@ async function mapInWorld(worldId: string, mapId: string) {
   return { db, map: m };
 }
 
+async function assertLayer(mapId: string, layerId: string | null | undefined) {
+  if (!layerId) return;
+  const db = await getDb();
+  const [l] = await db.select({ id: mapLayers.id }).from(mapLayers).where(and(eq(mapLayers.id, layerId), eq(mapLayers.mapId, mapId)));
+  if (!l) throw new Error("That layer belongs to another map.");
+}
+
 const mapInput = z.object({
   name: z.string().trim().min(1).max(120),
   description: z.string().max(5000).default(""),
@@ -106,6 +113,7 @@ export async function saveMarkerAction(worldId: string, mapId: string, raw: z.in
     const input = markerInput.parse(raw);
     const { db } = await mapInWorld(worldId, mapId);
     await assertRefs(worldId, { entityId: input.entityId, mapIds: [input.childMapId] });
+    await assertLayer(mapId, input.layerId);
     if (input.childMapId === mapId) throw new Error("A marker can't link to its own map.");
     const values = { ...input, entityId: input.entityId ?? null, childMapId: input.childMapId ?? null, layerId: input.layerId ?? null, color: input.color ?? null };
     let id = markerId;
@@ -153,6 +161,7 @@ export async function saveRegionAction(worldId: string, mapId: string, raw: z.in
     const input = regionInput.parse(raw);
     const { db } = await mapInWorld(worldId, mapId);
     await assertRefs(worldId, { entityId: input.entityId });
+    await assertLayer(mapId, input.layerId);
     const values = { ...input, entityId: input.entityId ?? null, layerId: input.layerId ?? null };
     let id = regionId;
     if (id) await db.update(mapRegions).set(values).where(and(eq(mapRegions.id, id), eq(mapRegions.mapId, mapId)));

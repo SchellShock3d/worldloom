@@ -11,6 +11,7 @@ import { recordRevision, userActor } from "@/server/services/history";
 import { type EntityInput, type EntityPatch, type RelationshipInput } from "@/lib/validation";
 import { slugify } from "@/lib/utils";
 import { z } from "zod";
+import { assertOwned } from "@/server/auth/ownership";
 import { run } from "./_util";
 
 const refresh = (worldId: string) => revalidatePath(`/w/${worldId}`, "layout");
@@ -54,21 +55,46 @@ export async function restoreRevisionAction(worldId: string, revisionId: string)
     if (!rev || rev.targetKind !== "entity" || !rev.before) throw new Error("This revision can't be restored.");
     const before = rev.before as Record<string, unknown>;
     if (rev.action === "delete") {
-      // Recreate the deleted entity with its old id.
+      // Recreate the deleted entry with its old id, through the normal validated create path.
       const [exists] = await db.select({ id: entities.id }).from(entities).where(eq(entities.id, rev.targetId));
-      if (exists) throw new Error("That entity already exists.");
-      const { id, worldId: _w, ...rest } = before as Record<string, unknown> & { id: string };
-      await db.insert(entities).values({ ...(rest as typeof entities.$inferInsert), id, worldId });
-      await recordRevision(db, userActor(user.id), {
-        worldId,
-        targetKind: "entity",
-        targetId: id,
-        targetLabel: rev.targetLabel,
-        action: "create",
-        summary: `Restored "${rev.targetLabel}" from history`,
+      if (exists) throw new Error("That entry already exists.");
+      const keys = ["type", "name", "summary", "body", "dmNotes", "aliases", "fields", "status", "locationId", "parentId", "campaignId", "imageFileId", "canonStatus", "visibility", "importance", "tags", "quest", "thread", "mystery", "rumour", "event"];
+      const input = Object.fromEntries(Object.entries(before).filter(([k, v]) => keys.includes(k) && v !== undefined)) as EntityInput;
+      const created = await db.transaction(async (tx) => {
+        // References to things that were deleted since are dropped rather than blocking the restore.
+        for (const k of ["locationId", "parentId", "campaignId", "imageFileId"] as const) {
+          const v = (input as Record<string, unknown>)[k];
+          if (typeof v !== "string") continue;
+          try {
+            await assertOwned(tx, worldId, k === "campaignId" ? { campaigns: [v] } : k === "imageFileId" ? { files: [v] } : { entities: [v] });
+          } catch {
+            (input as Record<string, unknown>)[k] = null;
+          }
+        }
+        const nested: [Record<string, unknown> | undefined, string][] = [
+          [input.quest as Record<string, unknown> | undefined, "giverId"],
+          [input.quest as Record<string, unknown> | undefined, "threadId"],
+          [input.rumour as Record<string, unknown> | undefined, "originEventId"],
+        ];
+        for (const [obj, k] of nested) {
+          if (!obj || typeof obj[k] !== "string") continue;
+          try {
+            await assertOwned(tx, worldId, { entities: [obj[k] as string] });
+          } catch {
+            obj[k] = null;
+          }
+        }
+        if (input.event?.sessionId) {
+          try {
+            await assertOwned(tx, worldId, { sessions: [input.event.sessionId] });
+          } catch {
+            input.event.sessionId = null;
+          }
+        }
+        return createEntity(tx, worldId, userActor(user.id), input, { id: rev.targetId, skipMentionResolution: true });
       });
       refresh(worldId);
-      return { id };
+      return { id: created.id };
     }
     const allowed = ["name", "summary", "body", "dmNotes", "aliases", "fields", "status", "locationId", "parentId", "canonStatus", "visibility", "importance"];
     const patch = Object.fromEntries(Object.entries(before).filter(([k]) => allowed.includes(k)));

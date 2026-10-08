@@ -25,7 +25,7 @@ export async function rollWeatherAction(worldId: string, campaignId: string) {
   return run(async () => {
     const { campaign, calendar } = await authorizeCampaign(worldId, campaignId, "editor");
     const db = await getDb();
-    const climate = await climateAt(db, campaign.currentLocationId);
+    const climate = await climateAt(db, worldId, campaign.currentLocationId);
     const w = weatherFor(calendar, campaign.currentAt, climate, `${campaignId}-${Date.now()}`);
     await db.update(campaigns).set({ currentWeather: w.description, weatherLocked: false }).where(eq(campaigns.id, campaignId));
     refresh(worldId);

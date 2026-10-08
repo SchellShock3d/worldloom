@@ -39,7 +39,7 @@ export default async function CalendarPage({ params, searchParams }: { params: P
   });
   const monthEvents = yearEvents.filter((ev) => ev.startAt <= monthEnd && (ev.endAt ?? ev.startAt) >= monthStart);
 
-  const climate = campaign ? await climateAt(db, campaign.currentLocationId) : "Temperate";
+  const climate = campaign ? await climateAt(db, worldId, campaign.currentLocationId) : "Temperate";
   // Moon peaks: a day is "full" when its midday illumination is a local maximum (and "new" at a minimum).
   const illum = (abs: number) => resolve(cal, abs + mpd / 2).moons.map((m) => m.illumination);
   const days: CalendarDay[] = [];
