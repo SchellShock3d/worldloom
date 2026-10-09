@@ -92,7 +92,7 @@ export function sniffMime(buf: Buffer, claimed: string): string | null {
   if (buf.toString("ascii", 0, 3) === "GIF") return "image/gif";
   if (claimed.startsWith("audio/")) {
     const head = buf.toString("ascii", 0, 4);
-    if (head === "ID3" || (buf[0] === 0xff && (buf[1]! & 0xe0) === 0xe0) || head === "OggS" || head === "RIFF" || head === "fLaC" || buf.toString("ascii", 4, 8) === "ftyp" || buf.readUInt32BE(0) === 0x1a45dfa3) return claimed;
+    if (head.startsWith("ID3") || (buf[0] === 0xff && (buf[1]! & 0xe0) === 0xe0) || head === "OggS" || head === "RIFF" || head === "fLaC" || buf.toString("ascii", 4, 8) === "ftyp" || buf.readUInt32BE(0) === 0x1a45dfa3) return claimed;
   }
   return null;
 }

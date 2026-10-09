@@ -37,6 +37,7 @@ cp .env.example .env.local
 | `AI_PROVIDER` | auto | `anthropic` or `offline`. Auto picks Anthropic when a key is set. |
 | `AI_MODEL` | `claude-sonnet-5-5` | Model for generation, analysis and chat. |
 | `AI_FAST_MODEL` | `claude-haiku-4-5-20251001` | Model for "I need something now" quick generators. |
+| `GEMINI_API_KEY` | empty | Turns on scene music: Google Lyria composes music and ambient soundscapes for your scenes. Get a key at [aistudio.google.com/apikey](https://aistudio.google.com/apikey). |
 | `AI_DEBUG_DIR` | unset | If set, every raw structured response from Claude is saved here as JSON, for prompt tuning. Leave unset in production. |
 | `UPLOAD_DIR` | `./.data/uploads` | Where uploaded maps, images and audio are stored. |
 | `PORT` | `3000` | Port for `npm start`. |
@@ -55,7 +56,7 @@ cp .env.example .env.local
 | `npm run db:migrate` | Apply migrations explicitly. |
 | `npm run db:generate` | Generate a migration after changing `src/server/db/schema.ts`. |
 | `npm run db:seed -- you@example.com [password]` | Add the demo world to an account (creating the account if you pass a password). |
-| `npm run check-ai` | Checks that Claude is connected: finds your key, sends one tiny request, and explains any problem in plain words. |
+| `npm run check-ai` | Checks that Claude is connected (and the Gemini key for music, if set): finds your keys, sends one tiny request, and explains any problem in plain words. |
 | `npx tsx scripts/live-ai-check.ts [out.json] [only=generate,session]` | Run every AI feature against a throwaway copy of the demo world with your real key, print a summary and save the full output. Uses a few dollars of API credit at most. |
 
 The demo world is never added to an account unless someone asks for it: from the home screen or with `db:seed`.
@@ -77,6 +78,7 @@ The demo world is never added to an account unless someone asks for it: from the
 **Campaigns and play**
 - Campaigns with their own clock, party, quests and a per-campaign overlay on world entries (an NPC can be dead in one campaign and alive in another), with an explicit "commit to canon".
 - Run Session mode: notes with quick log, scenes, who's here, party, quests and clues, initiative tracker, generators, dice, random tables, music and ambience, and a scene-aware copilot. Works on tablets.
+- Scene music with Google Lyria: one click composes a music loop and an ambient soundscape for the current scene. Claude writes the brief from the place, mood, weather, time of day and what's at stake, using instruments that fit your world's technology, and the tracks are saved to your library and attached to the scene. Every looping track (generated or uploaded) loops seamlessly: silence is trimmed and each pass crossfades into the next.
 - End Session: the AI reads your notes and proposes a recap, events, status and reputation changes, promises and quest updates. You approve, edit or reject each one.
 - Prepare Next Session, mysteries and clues, consequences and promises with due dates, faction reputation, travel, notes, encounters, a bestiary of your own creatures, shops and taverns.
 

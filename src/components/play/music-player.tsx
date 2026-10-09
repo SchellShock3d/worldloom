@@ -3,6 +3,8 @@
 import * as React from "react";
 import { Music, Pause, Play, Repeat, Square, Volume2, VolumeX, Waves, Zap } from "lucide-react";
 import { Slider } from "@/components/ui/primitives";
+import { Spinner } from "@/components/ui/button";
+import { startVoice, type Voice } from "./loop-audio";
 import { cn } from "@/lib/utils";
 
 export interface TrackView {
@@ -24,51 +26,55 @@ export interface ProfileView {
 
 type Channel = "music" | "ambience";
 
-/** Two looping channels (music + ambience) with crossfade, plus one-shot sound effects. */
-export function MusicPlayer({ tracks, profiles, compact = false, initialProfileId }: { tracks: TrackView[]; profiles: ProfileView[]; compact?: boolean; initialProfileId?: string | null }) {
-  const audio = React.useRef<Record<Channel, HTMLAudioElement | null>>({ music: null, ambience: null });
+/**
+ * Two looping channels (music + ambience) with crossfades between tracks, plus one-shot sound
+ * effects. Looping tracks loop seamlessly (see loop-audio.ts).
+ */
+export function MusicPlayer({
+  tracks,
+  profiles,
+  compact = false,
+  initialProfileId,
+  autoPlayProfileId,
+}: {
+  tracks: TrackView[];
+  profiles: ProfileView[];
+  compact?: boolean;
+  initialProfileId?: string | null;
+  /** When this changes to a profile in the list, start playing it (e.g. right after composing it). */
+  autoPlayProfileId?: string | null;
+}) {
+  const audio = React.useRef<Record<Channel, Voice | null>>({ music: null, ambience: null });
+  const tokens = React.useRef<Record<Channel, number>>({ music: 0, ambience: 0 });
   const [playing, setPlaying] = React.useState<Record<Channel, string | null>>({ music: null, ambience: null });
   const [paused, setPaused] = React.useState<Record<Channel, boolean>>({ music: false, ambience: false });
+  const [loading, setLoading] = React.useState<Record<Channel, boolean>>({ music: false, ambience: false });
   const [volume, setVolume] = React.useState<Record<Channel | "sfx", number>>({ music: 0.7, ambience: 0.5, sfx: 0.8 });
   const [muted, setMuted] = React.useState(false);
   const [tag, setTag] = React.useState<string | null>(null);
   const tags = Array.from(new Set(tracks.flatMap((t) => t.tags))).sort();
-
-  const fade = (el: HTMLAudioElement, to: number, ms = 600) =>
-    new Promise<void>((resolve) => {
-      const from = el.volume;
-      const start = performance.now();
-      const step = (t: number) => {
-        const k = Math.min(1, (t - start) / ms);
-        el.volume = Math.max(0, Math.min(1, from + (to - from) * k));
-        if (k < 1) requestAnimationFrame(step);
-        else resolve();
-      };
-      requestAnimationFrame(step);
-    });
+  const level = (ch: Channel, t: TrackView) => (muted ? 0 : volume[ch] * t.volume);
 
   const play = async (channel: Channel, track: TrackView | null) => {
-    const prev = audio.current[channel];
-    if (prev) {
-      await fade(prev, 0, 500);
-      prev.pause();
-    }
+    const token = ++tokens.current[channel];
+    audio.current[channel]?.stop(0.6);
+    audio.current[channel] = null;
     if (!track) {
-      audio.current[channel] = null;
       setPlaying((p) => ({ ...p, [channel]: null }));
       return;
     }
-    const el = new Audio(track.src);
-    el.loop = track.loop;
-    el.volume = 0;
-    audio.current[channel] = el;
     setPlaying((p) => ({ ...p, [channel]: track.id }));
     setPaused((p) => ({ ...p, [channel]: false }));
+    setLoading((l) => ({ ...l, [channel]: true }));
     try {
-      await el.play();
-      await fade(el, muted ? 0 : volume[channel] * track.volume);
+      const voice = await startVoice(track.src, track.loop);
+      if (token !== tokens.current[channel]) return voice.stop(0); // superseded while loading
+      audio.current[channel] = voice;
+      voice.setVolume(level(channel, track), 0.8);
     } catch {
-      setPlaying((p) => ({ ...p, [channel]: null }));
+      if (token === tokens.current[channel]) setPlaying((p) => ({ ...p, [channel]: null }));
+    } finally {
+      if (token === tokens.current[channel]) setLoading((l) => ({ ...l, [channel]: false }));
     }
   };
 
@@ -80,17 +86,18 @@ export function MusicPlayer({ tracks, profiles, compact = false, initialProfileI
 
   React.useEffect(() => {
     for (const ch of ["music", "ambience"] as Channel[]) {
-      const el = audio.current[ch];
+      const v = audio.current[ch];
       const t = tracks.find((x) => x.id === playing[ch]);
-      if (el && t) el.volume = muted ? 0 : volume[ch] * t.volume;
+      if (v && t) v.setVolume(level(ch, t));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [volume, muted, playing, tracks]);
 
   React.useEffect(() => {
     const ref = audio.current;
     return () => {
-      ref.music?.pause();
-      ref.ambience?.pause();
+      ref.music?.stop(0.2);
+      ref.ambience?.stop(0.2);
     };
   }, []);
 
@@ -104,6 +111,16 @@ export function MusicPlayer({ tracks, profiles, compact = false, initialProfileI
     play("music", tracks.find((t) => t.id === p.musicTrackId) ?? null);
     play("ambience", tracks.find((t) => t.id === p.ambienceTrackId) ?? null);
   };
+
+  const autoPlayed = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (!autoPlayProfileId || autoPlayed.current === autoPlayProfileId) return;
+    const p = profiles.find((x) => x.id === autoPlayProfileId);
+    if (!p) return; // wait for the refreshed list
+    autoPlayed.current = autoPlayProfileId;
+    applyProfile(p);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoPlayProfileId, profiles, tracks]);
 
   const filtered = tracks.filter((t) => !tag || t.tags.includes(tag));
   const nowMusic = tracks.find((t) => t.id === playing.music);
@@ -123,13 +140,14 @@ export function MusicPlayer({ tracks, profiles, compact = false, initialProfileI
               <span className="min-w-0 flex-1 truncate text-sm">{now ? now.name : <span className="text-faint">{ch === "music" ? "No music" : "No ambience"}</span>}</span>
               {now && (
                 <>
+                  {loading[ch] && <Spinner className="size-3.5 text-faint" />}
                   <button
                     onClick={() => {
-                      const el = audio.current[ch];
-                      if (!el) return;
-                      if (el.paused) el.play();
-                      else el.pause();
-                      setPaused((p) => ({ ...p, [ch]: !el.paused ? false : true }));
+                      const v = audio.current[ch];
+                      if (!v) return;
+                      if (v.paused) v.resume();
+                      else v.pause();
+                      setPaused((p) => ({ ...p, [ch]: v.paused }));
                     }}
                     className="rounded p-1 text-muted hover:text-fg"
                     aria-label={paused[ch] ? "Resume" : "Pause"}

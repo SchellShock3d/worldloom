@@ -52,7 +52,16 @@ function claudeStatus() {
   return 'Claude: NOT connected. AI features use the small built-in engine. Put ANTHROPIC_API_KEY=your-key in a file named .env.local in this folder, then restart.';
 }
 
-console.log(`\nWorldloom is starting at http://localhost:${port}\n${claudeStatus()}\nKeep this window open while you play. Press Ctrl+C to stop.\n`);
+function musicStatus() {
+  if (process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY) return "Music: Google Lyria ready.";
+  for (const file of [".env.local", ".env"]) {
+    const p = path.join(root, file);
+    if (existsSync(p) && /^\s*(GEMINI|GOOGLE)_API_KEY\s*=\s*\S+/m.test(readFileSync(p, "utf8"))) return `Music: Gemini key found in ${file}.`;
+  }
+  return "Music: not set up (optional). Add GEMINI_API_KEY to .env.local to compose scene music.";
+}
+
+console.log(`\nWorldloom is starting at http://localhost:${port}\n${claudeStatus()}\n${musicStatus()}\nKeep this window open while you play. Press Ctrl+C to stop.\n`);
 const child = spawn(npx, ["next", "start", "-p", port], { cwd: root, stdio: "inherit", shell: process.platform === "win32" });
 const stop = () => child.kill("SIGTERM");
 process.on("SIGINT", stop);

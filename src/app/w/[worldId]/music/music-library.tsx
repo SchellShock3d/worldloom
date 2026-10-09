@@ -73,7 +73,7 @@ export function MusicLibrary({ tracks, profiles, canEdit }: { tracks: Track[]; p
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-medium">{t.name}</p>
                           <p className="flex flex-wrap gap-x-2 text-xs text-faint">
-                            <span>{t.fileId ? "Uploaded file" : "Linked"}</span>
+                            <span>{t.tags.includes("lyria") ? "Composed with Lyria" : t.fileId ? "Uploaded file" : "Linked"}</span>
                             {t.loop && <span>loops</span>}
                             {t.tags.length > 0 && <span>{t.tags.join(", ")}</span>}
                           </p>

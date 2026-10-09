@@ -17,6 +17,7 @@ import { TypeIcon } from "@/components/entity/type-icon";
 import { useWorld, useNow } from "@/components/shell/world-context";
 import { InitiativeTracker } from "@/components/play/initiative-tracker";
 import { MusicPlayer } from "@/components/play/music-player";
+import { ComposeMusic } from "@/components/play/compose-music";
 import { DiceRoller, NeedSomethingNow, TableRoller } from "@/components/play/quick-tools";
 import { SceneEditor, emptyScene, type SceneDraft } from "@/components/play/scene-editor";
 import { ChatComposer, ChatThread, useAssistant } from "@/components/ai/assistant-drawer";
@@ -29,8 +30,9 @@ import { cn } from "@/lib/utils";
 /** Links from the run screen open in a new tab so notes, timers and music keep going. */
 const NEW_TAB = { target: "_blank", rel: "noopener" } as const;
 
-export function RunSession({ campaign, data }: { campaign: { id: string; name: string; currentWeather: string; partyInventory: string }; data: RunData }) {
+export function RunSession({ campaign, data, musicReady = false }: { campaign: { id: string; name: string; currentWeather: string; partyInventory: string }; data: RunData; musicReady?: boolean }) {
   const w = useWorld();
+  const [autoProfile, setAutoProfile] = React.useState<string | null>(null);
   const router = useRouter();
   const now = useNow();
   const session = data.live!;
@@ -507,8 +509,9 @@ export function RunSession({ campaign, data }: { campaign: { id: string; name: s
                 </section>
               </TabsContent>
 
-              <TabsContent value="music">
-                <MusicPlayer tracks={data.tracks} profiles={data.profiles} compact initialProfileId={scene?.audioProfileId ?? null} />
+              <TabsContent value="music" className="flex flex-col gap-4">
+                {scene && <ComposeMusic configured={musicReady} sceneId={scene.id} sceneName={scene.name} compact onComposed={({ profileId }) => profileId && setAutoProfile(profileId)} />}
+                <MusicPlayer tracks={data.tracks} profiles={data.profiles} compact initialProfileId={scene?.audioProfileId ?? null} autoPlayProfileId={autoProfile} />
               </TabsContent>
 
               <TabsContent value="ai" className="flex h-full flex-col">

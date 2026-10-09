@@ -26,6 +26,7 @@ if (!key) {
   if (fs.existsSync(path.join(root, ".env.local.txt"))) console.log("Found .env.local.txt. Windows added .txt to the name; rename it to .env.local (in Command Prompt: ren .env.local.txt .env.local).\n");
   else if (!fs.existsSync(path.join(root, ".env.local"))) console.log("There's no .env.local file in this folder yet. Create one from the example:\n  Windows:  copy .env.example .env.local   then   notepad .env.local\n  Mac:      cp .env.example .env.local     then   open -e .env.local\n");
   else console.log(".env.local exists, but the ANTHROPIC_API_KEY line is empty or missing. It should look like:\n  ANTHROPIC_API_KEY=sk-ant-...\n");
+  await checkMusic();
   process.exit(1);
 }
 if (process.env.AI_PROVIDER?.toLowerCase() === "offline") {
@@ -34,6 +35,18 @@ if (process.env.AI_PROVIDER?.toLowerCase() === "offline") {
 }
 if (!key.startsWith("sk-ant-")) console.log("\nThat key doesn't start with sk-ant-, so it may be pasted incompletely. Trying it anyway…");
 if (/\s/.test(key)) console.log("\nThe key contains a space. Remove any spaces or quotes around it in .env.local. Trying it anyway…");
+
+// Music (Google Lyria) is optional and separate from Claude.
+async function checkMusic() {
+  const { checkLyriaKey, lyriaKey } = await import("../src/server/music/lyria");
+  if (!lyriaKey()) {
+    console.log("Music: not set up (optional). To compose scene music with Google Lyria, add GEMINI_API_KEY=your-key to .env.local (get one at aistudio.google.com/apikey).\n");
+    return;
+  }
+  const r = await checkLyriaKey();
+  if (r.ok) console.log(`Music: Gemini key works. ${r.lyriaListed ? "Lyria is available." : "Lyria isn't listed for this key; if composing fails, check that billing is on for the key's Google project."}\n`);
+  else console.log(`Music: the Gemini key isn't working: ${r.error}\n`);
+}
 
 const { getAIProvider } = await import("../src/server/ai/provider");
 const provider = await getAIProvider();
@@ -46,5 +59,7 @@ try {
 } catch (err) {
   console.log("failed.\n");
   console.log(`Claude is NOT working: ${err instanceof Error ? err.message : String(err)}\n`);
+  await checkMusic();
   process.exit(1);
 }
+await checkMusic();
