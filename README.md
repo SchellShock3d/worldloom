@@ -16,7 +16,7 @@ npm start              # http://localhost:3000
 You don't need a database server. With no `DATABASE_URL`, Worldloom runs an embedded PostgreSQL (PGlite) in `./.data/pglite`, and migrations run automatically on first use.
 
 1. Open http://localhost:3000 and create an account.
-2. Walk through the world creator (idea, magic and technology, the land, peoples, powers and history, where play begins), or press **Create it now, fill in later**. You can also open the demo world from the home screen ("The Shattered Crown", a fully populated example).
+2. Give Claude a spark (a phrase, a mood, or nothing) and set the vibe dials. Pick one of three pitches, blend two, or ask for variations. Claude then writes the world section by section (the world, the land, peoples, powers, history, where play begins) while you keep, redo or steer each part, and **Create this world** turns it all into linked entries. Prefer to write it yourself? **I'd rather fill it in myself** opens the step-by-step form. You can also open the demo world from the home screen ("The Shattered Crown", a fully populated example).
 3. Create a campaign, then press **Run session**.
 
 Every AI feature works without an API key through a built-in rule-based engine. For full AI (grounded answers, NPC roleplay, rich generation, deep continuity review), add an Anthropic key:
@@ -62,7 +62,8 @@ The demo world is never added to an account unless someone asks for it: from the
 ## What's in it
 
 **The world**
-- A step-by-step world creator: genre, tone, magic (how much, where it comes from, how people feel about it), technology, the shape of the land, peoples, governments, faith, history, where play begins, and content to keep out. Every text field has a Suggest button that reads what you've already written.
+- An AI-led world creator: from a spark and four vibe dials (hopeful ↔ grim, grounded ↔ wild, familiar ↔ strange, small-scale ↔ epic), Claude pitches three worlds, then writes the one you choose section by section. You steer with one-click nudges ("darker", "more islands and sea", "add a secret society"), your own notes, redo, or by removing anything you don't want; sections that depend on something you changed are updated before anything new is built on them. Works offline with the built-in engine too.
+- A step-by-step form for DMs who'd rather write it themselves: genre, tone, magic, technology, the land, peoples, governments, faith, history, where play begins, and content to keep out, with a Suggest button on every text field.
 - Races and classes: the D&D 5e core set tuned to your world (a low-magic world makes wizards rare), plus homebrew that grows out of your setting (artificers and clockwork folk in a steampunk world, planeswalkers when magic is high). Places carry demographics ("Human 60%, Dwarf 25%…"), and the AI and generators use them when they create people and towns.
 - A wiki of typed entries with stable IDs: 28 built-in types (NPCs, races, classes, settlements, factions, religions, items, creatures, lore and more) plus your own custom types and one-off custom fields on any entry.
 - `@mentions` that link and survive renames, automatic backlinks, sub-pages, full revision history with restore.

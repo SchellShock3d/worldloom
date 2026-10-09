@@ -45,6 +45,10 @@ In-world time is a `bigint` count of minutes since the calendar's epoch. `lib/ca
 
 Each campaign has its own clock. The world clock follows the furthest campaign, and can be advanced on its own when no campaign is selected. Weather follows the clock unless the DM locks it.
 
+### The AI-led world creator
+
+`/onboarding` (`app/onboarding/spark/`) is a three-phase flow kept in the browser until the DM creates the world: a seed and vibe dials, three pitches, then a draft written section by section. `ai/tasks/spark.ts` writes pitches in two quick steps (three deliberately different one-line premises, then each expanded in parallel on the fast model) and sections on the main model, each against the pitch, the dials, the sections already written, and the DM's notes. `lib/spark-schema.ts` defines the shapes; `SECTION_DEPENDS` in `lib/spark.ts` says what each section is written from, so independent sections (land and peoples; history and the starting point) are written together. Steering a section marks the ones after it out of date, and anything about to be written on top of an out-of-date section waits until it's refreshed. `services/spark-world.ts` turns the finished draft into a world: profile and vibe, races and classes, then one change set (places nested by name, powers, ties, history, threads, the starting town and its NPCs and rumours) recorded as an approved proposal batch. Without a key, `ai/offline/spark.ts` produces the same shapes from templates; with a key, a failed section is reported rather than filled with template text.
+
 ### World profile and peoples
 
 The world creator stores its choices in `worlds.settings.profile` (`lib/world-profile.ts`): where magic comes from and how it's seen, the shape of the land, governments, faith, history, starting area, and the table's content limits. `worldHeader` puts a summary of it, and the limits, at the top of every AI request, including NPC roleplay.

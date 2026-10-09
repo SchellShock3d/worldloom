@@ -28,6 +28,9 @@ test("sign up, create a world and its first campaign", async ({ page }) => {
   await page.getByRole("button", { name: /create account|sign up/i }).click();
   await page.waitForURL(/\/onboarding/);
 
+  // The quick path lives in the fill-it-in-yourself creator.
+  await page.getByRole("link", { name: /fill it in myself/ }).click();
+  await page.waitForURL(/\/onboarding\/custom/);
   await page.locator("#ob-name").fill("Vellmoor");
   await page.locator("#ob-tone").fill("Salt, smugglers and drowned gods");
   await page.getByRole("button", { name: "Create it now, fill in later" }).click();
@@ -176,7 +179,7 @@ test.describe("world creator", () => {
   });
 
   test("walk every step, add homebrew, and create a world with its races and classes", async ({ page }) => {
-    await page.goto("/onboarding");
+    await page.goto("/onboarding/custom");
     await page.locator("#ob-name").fill("Brassmoor");
     await page.getByRole("group", { name: "Genre" }).getByRole("button", { name: "Steampunk" }).click();
     await page.getByRole("button", { name: "Suggest the pitch" }).click();
@@ -214,6 +217,45 @@ test.describe("world creator", () => {
     await expect(page.getByRole("link", { name: /Artificer/ })).toBeVisible();
     await expect(page.getByRole("link", { name: /^Gnome/ })).toBeVisible();
     await expect(page.getByRole("link", { name: /^Elf/ })).toHaveCount(0);
+    await expectNoErrorPage(page);
+  });
+
+  test("let Claude write it: pitch, blend, build, steer and create", async ({ page }) => {
+    await page.goto("/onboarding");
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+    await page.locator("#spark-seed").fill("Clockwork cities and dying gods");
+    await page.getByRole("radiogroup", { name: "Hopeful to Grim" }).getByRole("radio", { name: "Grim", exact: true }).click();
+    await page.getByRole("button", { name: "Pitch me three worlds" }).click();
+    await expect(page.getByRole("heading", { name: "Pick a world" })).toBeVisible();
+    const cards = page.getByRole("listitem").filter({ has: page.getByRole("button", { name: "Build this world" }) });
+    await expect(cards).toHaveCount(3);
+
+    // Blend two, then build the blend.
+    await cards.nth(0).getByLabel("Blend").check();
+    await cards.nth(1).getByLabel("Blend").check();
+    await page.getByRole("button", { name: "Blend them" }).click();
+    await expect(cards).toHaveCount(2);
+    await cards.nth(0).getByRole("button", { name: "Build this world" }).click();
+
+    // Every section gets written, in order.
+    await expect(page.getByText("6 of 6 written")).toBeVisible({ timeout: 60_000 });
+    const land = page.getByRole("region", { name: "The land" });
+    await land.getByRole("button", { name: "More islands and sea" }).click();
+    await expect(page.getByText(/written before your latest change/)).toBeVisible({ timeout: 30_000 });
+    await page.getByRole("button", { name: /up to date/ }).click();
+    await expect(page.getByText(/written before your latest change/)).toHaveCount(0, { timeout: 60_000 });
+    await page.getByRole("region", { name: "The world" }).getByRole("button", { name: "Keep" }).click();
+    await expect(page.getByText("Kept")).toBeVisible();
+
+    await page.getByRole("button", { name: "Create this world" }).first().click();
+    await page.waitForURL(/\/campaigns\/new/, { timeout: 60_000 });
+    const world = new URL(page.url()).pathname.split("/campaigns/")[0]!;
+    await page.goto(`${world}/locations`);
+    await expectNoErrorPage(page);
+    await page.goto(`${world}/peoples`);
+    await expect(page.getByRole("link", { name: /^Human/ })).toBeVisible();
+    await page.goto(`${world}/threads`);
     await expectNoErrorPage(page);
   });
 });

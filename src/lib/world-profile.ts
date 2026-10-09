@@ -4,6 +4,7 @@
  * history, and content to keep out). Stored in `worlds.settings.profile`.
  */
 import { z } from "zod";
+import { DEFAULT_DIALS, describeDials, type Dials } from "./spark";
 
 export const GENRES = ["High fantasy", "Dark fantasy", "Sword & sorcery", "Low fantasy", "Steampunk", "Gaslamp fantasy", "Nautical fantasy", "Gothic horror", "Cosmic horror", "Mythic / ancient", "Science fantasy", "Post-apocalyptic", "Weird west", "Fairy tale"];
 export const MAGIC_LEVELS = ["None", "Low", "Moderate", "High", "Wild", "Mythic"];
@@ -35,6 +36,9 @@ export const worldProfileSchema = z.object({
   startingArea: z.string().max(1000).optional(),
   detailStart: z.boolean().optional(),
   avoid: z.string().max(1000).optional(),
+  /** Vibe dials from the AI-led creator, -2..2 each. */
+  vibe: z.record(z.string(), z.number().int().min(-2).max(2)).optional(),
+  seed: z.string().max(500).optional(),
 });
 export type WorldProfile = z.infer<typeof worldProfileSchema>;
 
@@ -55,6 +59,7 @@ export function profileSummary(p: WorldProfile | undefined | null): string {
     p.conflict ? `Central conflict: ${p.conflict}` : "",
     p.inspirations ? `Inspirations: ${p.inspirations}` : "",
     p.startingArea ? `Play begins: ${p.startingArea}` : "",
+    p.vibe ? `Vibe: ${describeDials({ ...DEFAULT_DIALS, ...p.vibe } as Dials)}` : "",
   ].filter(Boolean);
   return lines.join("\n");
 }

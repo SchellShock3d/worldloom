@@ -55,7 +55,12 @@ async function existingNames(db: DB, worldId: string) {
  * Add D&D core races and classes at the chosen prevalence. "Absent" ones are skipped, and so is
  * anything the world already has under the same name.
  */
-export async function addCorePeoples(db: DB, worldId: string, actor: Actor, choice: { races: Record<string, PrevalenceChoice>; classes: Record<string, PrevalenceChoice> }) {
+export async function addCorePeoples(
+  db: DB,
+  worldId: string,
+  actor: Actor,
+  choice: { races: Record<string, PrevalenceChoice>; classes: Record<string, PrevalenceChoice>; /** World-specific notes, keyed "race:Elf" or "class:Wizard". */ notes?: Record<string, string> },
+) {
   const have = await existingNames(db, worldId);
   const created: { id: string; name: string; type: string }[] = [];
   for (const r of CORE_RACES) {
@@ -68,7 +73,7 @@ export async function addCorePeoples(db: DB, worldId: string, actor: Actor, choi
       visibility: "public",
       importance: p === "Common" ? 1 : 0,
       tags: ["dnd-5e"],
-      fields: { prevalence: p, source: "D&D 5e core", playable: true, size: r.size, speed: r.speed, lifespan: r.lifespan, traits: r.traits },
+      fields: { prevalence: p, source: "D&D 5e core", playable: true, size: r.size, speed: r.speed, lifespan: r.lifespan, traits: r.traits, ...(choice.notes?.[`race:${r.name}`] ? { society: choice.notes[`race:${r.name}`] } : {}) },
     });
     created.push({ id: e.id, name: e.name, type: e.type });
   }
@@ -81,7 +86,7 @@ export async function addCorePeoples(db: DB, worldId: string, actor: Actor, choi
       summary: c.summary,
       visibility: "public",
       tags: ["dnd-5e"],
-      fields: { prevalence: p, source: "D&D 5e core", role: c.role, primaryAbility: c.primaryAbility, hitDie: c.hitDie },
+      fields: { prevalence: p, source: "D&D 5e core", role: c.role, primaryAbility: c.primaryAbility, hitDie: c.hitDie, ...(choice.notes?.[`class:${c.name}`] ? { inWorld: choice.notes[`class:${c.name}`] } : {}) },
     });
     created.push({ id: e.id, name: e.name, type: e.type });
   }

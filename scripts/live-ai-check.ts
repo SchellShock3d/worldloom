@@ -183,6 +183,35 @@ await step("foundation_profile", async () => {
   return { ...res, items: batch?.items.map((i) => ({ kind: i.kind, payload: i.payload })) };
 });
 
+await step("spark", async () => {
+  const { pitchWorlds, draftSection } = await import("../src/server/ai/tasks/spark");
+  const { createWorldFromDraft } = await import("../src/server/services/spark-world");
+  const { SECTIONS } = await import("../src/lib/spark");
+  const dials = { tone: 1, realism: 1, novelty: 1, scale: 0 };
+  const t0 = Date.now();
+  const p = await pitchWorlds({ seed: "a city built on the back of a sleeping titan", dials });
+  console.log(`    pitches (${p.provider}, ${((Date.now() - t0) / 1000).toFixed(1)}s): ${p.pitches.map((x) => `${x.name} — ${x.logline}`).join(" | ")}`);
+  const blend = await pitchWorlds({ seed: "", dials, blend: [p.pitches[0]!, p.pitches[1]!] });
+  console.log(`    blend: ${blend.pitches[0]?.name} — ${blend.pitches[0]?.logline}`);
+  const pitch = p.pitches[0]!;
+  const sections: Record<string, unknown> = {};
+  const timings: string[] = [];
+  for (const s of SECTIONS) {
+    const t = Date.now();
+    const r = await draftSection({ key: s.key, pitch, dials, sections: sections as never, mode: "new" });
+    sections[s.key] = r.data;
+    timings.push(`${s.key} ${r.provider} ${((Date.now() - t) / 1000).toFixed(0)}s`);
+  }
+  console.log(`    sections: ${timings.join(", ")}`);
+  const t1 = Date.now();
+  const steered = await draftSection({ key: "powers", pitch, dials, sections: sections as never, previous: sections.powers as never, notes: ["Add a secret society"], mode: "steer" });
+  console.log(`    steer powers (${((Date.now() - t1) / 1000).toFixed(0)}s): factions now ${(steered.data as { factions: { name: string; kind: string }[] }).factions.map((f) => `${f.name} (${f.kind})`).join(", ")}`);
+  sections.powers = steered.data;
+  const res = await createWorldFromDraft(db, { ...actor, userId: user!.id }, { seed: "titan", dials, pitch, sections: sections as never });
+  console.log(`    world: applied ${res.applied}, failed ${res.failed.length}${res.failed.length ? ` (${res.failed.slice(0, 3).map((f) => f.error).join(" | ")})` : ""}`);
+  return { pitches: p.pitches, blend: blend.pitches, sections, res };
+});
+
 const [c] = await db.select().from(campaigns).where(eq(campaigns.id, campaignId));
 results.meta = { model: provider.model, campaignNow: c?.currentAt };
 fs.writeFileSync(out, JSON.stringify(results, null, 2));
