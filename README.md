@@ -55,6 +55,7 @@ cp .env.example .env.local
 | `npm run db:migrate` | Apply migrations explicitly. |
 | `npm run db:generate` | Generate a migration after changing `src/server/db/schema.ts`. |
 | `npm run db:seed -- you@example.com [password]` | Add the demo world to an account (creating the account if you pass a password). |
+| `npm run check-ai` | Checks that Claude is connected: finds your key, sends one tiny request, and explains any problem in plain words. |
 | `npx tsx scripts/live-ai-check.ts [out.json] [only=generate,session]` | Run every AI feature against a throwaway copy of the demo world with your real key, print a summary and save the full output. Uses a few dollars of API credit at most. |
 
 The demo world is never added to an account unless someone asks for it: from the home screen or with `db:seed`.

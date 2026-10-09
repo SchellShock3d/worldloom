@@ -170,6 +170,12 @@ export function Spark({ firstWorld, userName, aiLive }: { firstWorld: boolean; u
           <h1 className="font-serif text-4xl font-semibold tracking-[-0.01em]">{firstWorld ? `Welcome, ${userName.split(" ")[0]}. What should we make?` : "What should we make?"}</h1>
           <p className="mt-2 text-md text-muted">Give Claude a spark: a phrase, a mood, a mash-up, or nothing at all. You&apos;ll get three worlds to choose from, then watch the one you pick get written. You steer; Claude does the writing.</p>
         </header>
+        {!aiLive && (
+          <div role="note" className="rounded-lg border border-ember/40 bg-ember-soft/40 px-4 py-3 text-sm">
+            <p className="font-medium text-fg">Claude isn&apos;t connected, so this is the built-in engine.</p>
+            <p className="mt-1 text-muted">It only knows a handful of world templates and can&apos;t really use your spark or the dials, so you&apos;ll keep seeing the same few worlds. To connect Claude, put your Anthropic API key in a file called <code className="rounded bg-surface-3 px-1">.env.local</code> in the worldloom folder, as <code className="rounded bg-surface-3 px-1">ANTHROPIC_API_KEY=your-key</code>, then stop Worldloom (Ctrl+C) and run <code className="rounded bg-surface-3 px-1">npm start</code> again. Run <code className="rounded bg-surface-3 px-1">npm run check-ai</code> to test the key.</p>
+          </div>
+        )}
         <div className="flex flex-col gap-2">
           <label htmlFor="spark-seed" className="text-sm font-medium text-muted">
             Your spark
@@ -218,6 +224,7 @@ export function Spark({ firstWorld, userName, aiLive }: { firstWorld: boolean; u
             <h1 className="font-serif text-4xl font-semibold tracking-[-0.01em]">Pick a world</h1>
             <p className="mt-1 text-md text-muted">Build one, ask for variations, or tick two and blend them.</p>
             {aiLive && s.provider === "offline" && <p className="mt-2 rounded-md bg-surface-2 px-3 py-2 text-sm text-muted">Claude couldn&apos;t be reached just now, so these come from the built-in engine. Ask for new pitches to try Claude again.</p>}
+            {!aiLive && <p className="mt-2 rounded-md bg-surface-2 px-3 py-2 text-sm text-muted">Built-in engine: Claude isn&apos;t connected, so these are stock templates. Connect your API key for worlds written from your spark.</p>}
           </div>
         </header>
 
@@ -315,7 +322,7 @@ export function Spark({ firstWorld, userName, aiLive }: { firstWorld: boolean; u
           </div>
           <div className="flex items-center gap-2">
             <span className="hidden text-sm text-muted sm:inline">
-              {written} of {SECTIONS.length} written
+              {written} of {SECTIONS.length} written{s.provider === "offline" ? " · built-in engine" : ""}
             </span>
             <Button variant="ghost" size="sm" onClick={() => setShowDials((v) => !v)} aria-expanded={showDials}>
               <SlidersHorizontal /> Vibe

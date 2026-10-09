@@ -2,7 +2,7 @@
 // Builds first when there's no build yet or the code has changed since the last one,
 // so after an update you still only need this one command.
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -41,7 +41,18 @@ if (needsBuild()) {
   }
 }
 
-console.log(`\nWorldloom is starting at http://localhost:${port}\nKeep this window open while you play. Press Ctrl+C to stop.\n`);
+// Say up front whether Claude will be used, so a missing key isn't a mystery later.
+function claudeStatus() {
+  if (process.env.ANTHROPIC_API_KEY) return "Claude: connected (key set in the environment).";
+  for (const file of [".env.local", ".env"]) {
+    const p = path.join(root, file);
+    if (existsSync(p) && /^\s*ANTHROPIC_API_KEY\s*=\s*\S+/m.test(readFileSync(p, "utf8"))) return `Claude: key found in ${file}. Run "npm run check-ai" if AI features don't seem to work.`;
+  }
+  if (existsSync(path.join(root, ".env.local.txt"))) return 'Claude: NOT connected. Found ".env.local.txt"; rename it to ".env.local" (ren .env.local.txt .env.local) and restart.';
+  return 'Claude: NOT connected. AI features use the small built-in engine. Put ANTHROPIC_API_KEY=your-key in a file named .env.local in this folder, then restart.';
+}
+
+console.log(`\nWorldloom is starting at http://localhost:${port}\n${claudeStatus()}\nKeep this window open while you play. Press Ctrl+C to stop.\n`);
 const child = spawn(npx, ["next", "start", "-p", port], { cwd: root, stdio: "inherit", shell: process.platform === "win32" });
 const stop = () => child.kill("SIGTERM");
 process.on("SIGINT", stop);
