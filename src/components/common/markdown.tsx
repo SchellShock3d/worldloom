@@ -36,7 +36,7 @@ export function Markdown({
   className?: string;
   /** Hide DM-only blocks entirely. */
   playerView?: boolean;
-  variant?: "lore" | "compact" | "sans";
+  variant?: "lore" | "compact" | "sans" | "small";
   worldId?: string;
   /** Where @mention links point (defaults to the DM wiki: /w/:world/e). */
   linkBase?: string;
@@ -71,7 +71,7 @@ export function Markdown({
     }),
     [refs, wid, linkBase, playerView, newTab],
   );
-  const cls = cn("lore", variant === "compact" && "lore--compact", variant === "sans" && "lore--sans", className);
+  const cls = cn("lore", variant === "compact" && "lore--compact", variant === "sans" && "lore--sans", variant === "small" && "lore--small", className);
   if (!segments.length) return null;
   return (
     <div className={cls}>

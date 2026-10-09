@@ -131,6 +131,35 @@ test.describe("signed in", () => {
     await expect(page.getByText(/AI proposal, approved by Test DM/).first()).toBeVisible();
   });
 
+  test("fill in a thin spot with Build out, then ask what follows from a change", async ({ page }) => {
+    await page.goto(`${worldUrl}/thin-spots`);
+    const row = page.getByRole("listitem").filter({ hasText: /in Saltmarsh/ }).first();
+    await expect(row).toBeVisible();
+    await row.getByRole("link", { name: /Fill this in/ }).click();
+    await page.waitForURL(/\/build\?parts=/);
+    await expect(page.getByRole("heading", { name: "Build out Saltmarsh" })).toBeVisible();
+    await page.getByRole("button", { name: "Start building" }).click();
+    const add = page.getByRole("button", { name: "Add to world" }).first();
+    await expect(add).toBeEnabled({ timeout: 30000 });
+    // Steer a section: it's rewritten in place.
+    const firstSection = page.locator("section[aria-label]").filter({ has: page.getByRole("button", { name: "Redo" }) }).first();
+    await firstSection.getByRole("button", { name: "Redo" }).click();
+    await expect(add).toBeEnabled({ timeout: 30000 });
+    await add.click();
+    await page.waitForURL(/\/e\/[0-9a-f-]{36}$/);
+    await expect(page.getByRole("heading", { name: "Saltmarsh", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Here, in Saltmarsh" })).toBeVisible();
+
+    // What follows from a change, from the entry's AI tools.
+    await page.getByRole("button", { name: "AI tools" }).click();
+    await page.getByRole("menuitem", { name: /What follows from a change/ }).click();
+    await page.getByLabel("What changed?").fill("A storm tide has flooded half of Saltmarsh");
+    await page.getByRole("dialog").getByRole("button", { name: /Propose what follows/ }).click();
+    await page.waitForURL(/\/proposals\/[0-9a-f-]{36}/);
+    await expect(page.getByText("Nothing here is canon until you approve it.")).toBeVisible();
+    await expectNoErrorPage(page);
+  });
+
   test("every main screen renders", async ({ page }) => {
     const paths = [
       "",
@@ -145,6 +174,7 @@ test.describe("signed in", () => {
       "/timeline",
       "/calendar",
       "/graph",
+      "/thin-spots",
       "/threads",
       "/news",
       "/proposals",

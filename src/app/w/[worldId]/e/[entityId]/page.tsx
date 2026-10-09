@@ -10,6 +10,8 @@ import { getEntity } from "@/server/services/entities";
 import { getEntityDetail } from "@/server/services/entity-detail";
 import { collectRefs } from "@/server/services/refs";
 import { getClueKnowers } from "@/server/services/play";
+import { pendingFollowOns } from "@/server/services/follow-on";
+import { FollowOnCallout } from "@/components/entity/follow-on";
 import { formatDate } from "@/lib/calendar";
 import { Badge, Panel, SectionTitle } from "@/components/ui/display";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/primitives";
@@ -34,7 +36,7 @@ export async function generateMetadata({ params }: { params: Promise<{ worldId: 
 
 export default async function EntityPage({ params }: { params: Promise<{ worldId: string; entityId: string }> }) {
   const { worldId, entityId } = await params;
-  const { calendar } = await requireWorld(worldId);
+  const { calendar, role } = await requireWorld(worldId);
   const db = await getDb();
   const entity = await getEntity(db, worldId, entityId);
   if (!entity) notFound();
@@ -47,6 +49,7 @@ export default async function EntityPage({ params }: { params: Promise<{ worldId
   const ext = d.extension;
   const clueKnowers = ext && "clues" in ext && ext.clues ? await getClueKnowers(db, worldId, ext.clues.map((c) => c.id)) : [];
   const statusOverride = d.overlay?.status;
+  const followOn = role === "owner" || role === "editor" ? (await pendingFollowOns(db, worldId, { entityId: entity.id, limit: 1 }))[0] : undefined;
   const canHoldKnowledge = ["npc", "pc", "faction", "organization", "religion", "deity", "creature"].includes(entity.type);
 
   const derived = [
@@ -106,6 +109,7 @@ export default async function EntityPage({ params }: { params: Promise<{ worldId
 
       <div className="mt-6 grid gap-8 lg:grid-cols-[minmax(0,1fr)_19rem]">
         <div className="min-w-0">
+          {followOn && <FollowOnCallout entityId={entity.id} change={{ revisionId: followOn.revisionId, description: followOn.description, campaign: followOn.campaign?.name ?? null, touches: followOn.touches }} />}
           {ext?.kind === "quest" && ext.quest && (
             <div className="mb-6 flex flex-col gap-4">
               <QuestPanel
@@ -167,11 +171,16 @@ export default async function EntityPage({ params }: { params: Promise<{ worldId
               ) : (
                 <div className="rounded-lg border border-dashed border-line px-5 py-8 text-center">
                   <p className="font-medium">No article yet</p>
-                  <p className="mt-1 text-sm text-muted">Write about {entity.name}, or ask the AI to expand it from what's already known.</p>
-                  <div className="mt-3 flex justify-center gap-2">
+                  <p className="mt-1 text-sm text-muted">Write about {entity.name} yourself, or let Claude build it out from what your world already says.</p>
+                  <div className="mt-3 flex justify-center gap-4">
                     <Link href={`${base}/e/${entity.id}/edit`} className="text-sm font-medium text-accent hover:underline">
                       Write the article
                     </Link>
+                    {!["quest", "mystery", "rumour", "event"].includes(entity.type) && (
+                      <Link href={`${base}/e/${entity.id}/build`} className="text-sm font-medium text-arcane hover:underline">
+                        Build it out with Claude
+                      </Link>
+                    )}
                   </div>
                 </div>
               )}

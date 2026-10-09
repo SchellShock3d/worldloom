@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { and, desc, eq, inArray, isNull, ne } from "drizzle-orm";
-import { BookOpen, Clapperboard, Compass, FastForward, History, Inbox, Map as MapIcon, NotebookPen, Sparkles, TriangleAlert, Users } from "lucide-react";
+import { BookOpen, Clapperboard, Compass, FastForward, GitBranch, Hammer, History, Inbox, Map as MapIcon, NotebookPen, Sparkles, Sprout, TriangleAlert, Users } from "lucide-react";
 import { requireWorld } from "@/server/auth/access";
 import { getDb } from "@/server/db/client";
 import { entities, entityMetrics, gameSessions, maps } from "@/server/db/schema";
@@ -10,6 +10,8 @@ import { listTimeline } from "@/server/services/timeline";
 import { recentChanges, forgottenThreads } from "@/server/services/insights";
 import { listBatches } from "@/server/services/proposals";
 import { listConsequences } from "@/server/services/play";
+import { findThinSpots } from "@/server/services/thin-spots";
+import { pendingFollowOns } from "@/server/services/follow-on";
 import { formatDate, describeDuration, timeOfDay } from "@/lib/calendar";
 import { timeAgo } from "@/lib/utils";
 import { Badge, EmptyState, Meter, Panel, PanelHeader } from "@/components/ui/display";
@@ -20,13 +22,13 @@ import { QuickActions } from "./quick-actions";
 
 export default async function WorldDashboard({ params }: { params: Promise<{ worldId: string }> }) {
   const { worldId } = await params;
-  const { world, calendar } = await requireWorld(worldId);
+  const { world, calendar, role } = await requireWorld(worldId);
   const db = await getDb();
   const { campaign, all: campaigns } = await getActiveCampaign(worldId);
   const now = campaign?.currentAt ?? world.currentAt;
   const base = `/w/${worldId}`;
 
-  const [threads, upcoming, changes, pendingBatches, important, factions, recentLore, lastSession, firstMap, hooks, forgotten] = await Promise.all([
+  const [threads, upcoming, changes, pendingBatches, important, factions, recentLore, lastSession, firstMap, hooks, forgotten, thin, followOns] = await Promise.all([
     listThreads(db, worldId, { statuses: ["escalating", "active", "dormant"] }),
     listTimeline(db, worldId, { campaignId: campaign?.id ?? null, from: now, order: "asc", limit: 5 }),
     recentChanges(db, worldId, { campaignId: campaign?.id ?? null, limit: 10 }),
@@ -53,7 +55,10 @@ export default async function WorldDashboard({ params }: { params: Promise<{ wor
     db.select({ id: maps.id, name: maps.name }).from(maps).where(and(eq(maps.worldId, worldId), isNull(maps.parentMapId))).limit(1),
     campaign ? listConsequences(db, worldId, campaign.id, ["pending", "foreshadowed"]) : Promise.resolve([]),
     campaign ? forgottenThreads(db, worldId, campaign.id, calendar) : Promise.resolve([]),
+    findThinSpots(db, worldId, { campaignId: campaign?.id ?? null }),
+    role === "owner" || role === "editor" ? pendingFollowOns(db, worldId, { limit: 2 }) : Promise.resolve([]),
   ]);
+  const canEdit = role === "owner" || role === "editor";
   const factionMetrics = factions.length
     ? await db.select().from(entityMetrics).where(and(inArray(entityMetrics.entityId, factions.map((f) => f.id)), eq(entityMetrics.key, "influence")))
     : [];
@@ -88,7 +93,7 @@ export default async function WorldDashboard({ params }: { params: Promise<{ wor
 
       <QuickActions hasCampaign={!!campaign} campaignId={campaign?.id ?? null} mapId={firstMap[0]?.id ?? null} />
 
-      {(alerts.length > 0 || pendingBatches.length > 0) && (
+      {(alerts.length > 0 || pendingBatches.length > 0 || followOns.length > 0) && (
         <section className="mt-6 grid gap-2 md:grid-cols-2" aria-label="Alerts">
           {pendingBatches.slice(0, 2).map(({ batch, pending }) => (
             <Link key={batch.id} href={`${base}/proposals/${batch.id}`} className="flex items-start gap-3 rounded-lg border border-arcane/25 bg-arcane-soft/50 px-4 py-3 hover:border-arcane/50">
@@ -96,6 +101,15 @@ export default async function WorldDashboard({ params }: { params: Promise<{ wor
               <span className="min-w-0">
                 <span className="block font-medium">{batch.title}</span>
                 <span className="block text-sm text-muted">{pending} proposals waiting for review</span>
+              </span>
+            </Link>
+          ))}
+          {followOns.map((f) => (
+            <Link key={f.revisionId} href={`${base}/e/${f.entity.id}`} className="flex items-start gap-3 rounded-lg border border-arcane/25 bg-surface px-4 py-3 hover:border-arcane/50">
+              <GitBranch className="mt-0.5 size-4 shrink-0 text-arcane" />
+              <span className="min-w-0">
+                <span className="block font-medium">{f.description}</span>
+                <span className="block text-sm text-muted">It touches {f.touches.length} {f.touches.length === 1 ? "entry" : "entries"}. Claude can propose what follows.</span>
               </span>
             </Link>
           ))}
@@ -254,6 +268,25 @@ export default async function WorldDashboard({ params }: { params: Promise<{ wor
               </div>
             )}
           </Panel>
+
+          {canEdit && thin.spots.length > 0 && (
+            <Panel>
+              <PanelHeader title="Room to grow" icon={<Sprout />} description="Parts of the world that are only sketched in." action={<Button asChild variant="ghost" size="sm"><Link href={`${base}/thin-spots`}>All {thin.spots.length}</Link></Button>} />
+              <ul className="px-2 pb-2">
+                {thin.spots.slice(0, 3).map((t) => (
+                  <li key={t.id} className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-surface-2">
+                    <TypeIcon type={t.entity.type} />
+                    <Link href={`${base}/e/${t.entity.id}`} className="min-w-0 flex-1 truncate text-sm hover:text-accent" title={t.detail}>
+                      {t.title}
+                    </Link>
+                    <Link href={`${base}/e/${t.entity.id}/build?parts=${t.parts.join(",")}`} className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-arcane hover:underline" aria-label={`Fill in: ${t.title}`}>
+                      <Hammer className="size-3" /> Fill in
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </Panel>
+          )}
 
           <Panel>
             <PanelHeader title="Important places" icon={<MapIcon />} action={<Button asChild variant="ghost" size="sm"><Link href={`${base}/locations`}>All</Link></Button>} />

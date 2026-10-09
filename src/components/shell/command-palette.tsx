@@ -123,6 +123,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
       ["Calendar", `${base}/calendar`, FileText],
       ["Generators", `${base}/generators`, FileText],
       ["Relationship graph", `${base}/graph`, FileText],
+      ["Thin spots", `${base}/thin-spots`, FileText],
       ["World settings", `${base}/settings`, FileText],
     ];
     for (const [label, href, icon] of nav) list.push({ id: `nav-${href}`, label: `Go to ${label}`, group: "Navigate", icon, run: () => go(href) });

@@ -128,7 +128,7 @@ export const worlds = pgTable("worlds", {
   /** World clock: the latest in-world moment that canon has reached. */
   currentAt: worldTime("current_at").notNull().default(0),
   coverFileId: uuid("cover_file_id").references((): AnyPgColumn => files.id, { onDelete: "set null" }),
-  settings: jsonb("settings").$type<{ aiCreativity?: "grounded" | "balanced" | "inventive"; houseRules?: string; profile?: WorldProfile }>().notNull().default({}),
+  settings: jsonb("settings").$type<{ aiCreativity?: "grounded" | "balanced" | "inventive"; houseRules?: string; profile?: WorldProfile; thinSpotsDismissed?: string[]; followOnHandled?: string[] }>().notNull().default({}),
   createdBy: uuid("created_by")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
@@ -1045,7 +1045,8 @@ export type ProposalSource =
   | "onboarding"
   | "consequences"
   | "emergency"
-  | "prep";
+  | "prep"
+  | "follow_on";
 
 export const proposals = pgTable(
   "proposals",

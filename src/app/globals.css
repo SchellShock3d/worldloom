@@ -293,6 +293,16 @@
   font-size: var(--text-md);
   line-height: 1.6;
 }
+/* Small supporting text inside cards (build-out entries). */
+.lore--small {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+.lore--small > * + * {
+  margin-top: 0.5em;
+}
 
 /* Inline entity mention */
 .mention {

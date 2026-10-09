@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Archive, ArchiveRestore, Eye, EyeOff, GitBranch, Link2, MessageSquareQuote, MoreHorizontal, Pencil, ScrollText, Sparkles, Star, Trash2, UserRound, Wand2 } from "lucide-react";
+import { Archive, ArchiveRestore, Eye, EyeOff, GitBranch, Hammer, Link2, MessageSquareQuote, MoreHorizontal, Pencil, ScrollText, Sparkles, Star, Trash2, UserRound, Wand2, Waypoints } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   ConfirmDialog,
@@ -21,6 +21,7 @@ import {
 import { Field, Textarea } from "@/components/ui/input";
 import { deleteEntityAction, updateEntityAction } from "@/server/actions/entities";
 import { consequencesAction, loreAction_ } from "@/server/actions/ai";
+import { followOnAction } from "@/server/actions/follow-on";
 import { useWorld } from "@/components/shell/world-context";
 import { AiWorking } from "@/components/ai/ai-working";
 import type { LoreAction } from "@/server/ai/tasks/world-tasks";
@@ -37,6 +38,8 @@ export function EntityActions({
   const [guidance, setGuidance] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [consOpen, setConsOpen] = React.useState(false);
+  const [followOpen, setFollowOpen] = React.useState(false);
+  const [changed, setChanged] = React.useState("");
   const [action, setAction] = React.useState("");
   const base = `/w/${w.worldId}`;
 
@@ -75,9 +78,16 @@ export function EntityActions({
           </Link>
         </Button>
       )}
+      {!["quest", "mystery", "rumour", "event"].includes(entity.type) && (
+        <Button asChild variant="arcane" size="md">
+          <Link href={`${base}/e/${entity.id}/build`}>
+            <Hammer /> Build out
+          </Link>
+        </Button>
+      )}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="arcane" size="md">
+          <Button variant="secondary" size="md">
             <Sparkles /> AI tools
           </Button>
         </DropdownMenuTrigger>
@@ -103,6 +113,9 @@ export function EntityActions({
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => setConsOpen(true)}>
             <GitBranch /> What if the party…
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setFollowOpen(true)}>
+            <Waypoints /> What follows from a change…
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => w.openAssistant({ focusEntityId: entity.id })}>
             <Sparkles /> Ask the copilot about this
@@ -182,6 +195,36 @@ export function EntityActions({
             </DialogFooter>
           </DialogContent>
         )}
+      </Dialog>
+
+      <Dialog open={followOpen} onOpenChange={setFollowOpen}>
+        <DialogContent title="What follows from a change" description={`Describe what's changed about ${entity.name}. Claude proposes the knock-on updates for the rest of your world: successors, reactions, quests and threads, rumours. You review every one.`}>
+          <Field label="What changed?" htmlFor="follow-change">
+            <Textarea id="follow-change" value={changed} onChange={(e) => setChanged(e.target.value)} placeholder={`${entity.name} has fled the city with the treasury…`} className="min-h-20" />
+          </Field>
+          <AiWorking active={busy} live={w.aiProvider.live} what="Claude is following the threads" typical="20–40 seconds" />
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setFollowOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="arcane"
+              loading={busy}
+              disabled={changed.trim().length < 3}
+              onClick={async () => {
+                setBusy(true);
+                const res = await followOnAction(w.worldId, { entityId: entity.id, change: `${changed.trim().replace(/\.$/, "")}` });
+                setBusy(false);
+                if (!res.ok) return toast.error(res.error);
+                setFollowOpen(false);
+                setChanged("");
+                router.push(`${base}/proposals/${res.data.batchId}`);
+              }}
+            >
+              <Waypoints /> Propose what follows
+            </Button>
+          </DialogFooter>
+        </DialogContent>
       </Dialog>
 
       <Dialog open={consOpen} onOpenChange={setConsOpen}>

@@ -18,6 +18,7 @@ const SOURCE: Record<string, string> = {
   consequences: "Consequences",
   emergency: "Quick generate",
   prep: "Session prep",
+  follow_on: "Follow-on changes",
 };
 
 export default async function ProposalsPage({ params, searchParams }: { params: Promise<{ worldId: string }>; searchParams: Promise<{ show?: string }> }) {

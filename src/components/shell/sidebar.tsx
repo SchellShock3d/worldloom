@@ -3,43 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import {
-  BookOpen,
-  CalendarDays,
-  ChevronDown,
-  Clapperboard,
-  Compass,
-  Dices,
-  Gem,
-  GitBranch,
-  History,
-  Inbox,
-  Languages,
-  LayoutDashboard,
-  Megaphone,
-  Map as MapIcon,
-  Mountain,
-  Music,
-  Newspaper,
-  NotebookPen,
-  PanelLeftClose,
-  PanelLeftOpen,
-  PawPrint,
-  Plus,
-  Route,
-  ScrollText,
-  SearchCheck,
-  Settings,
-  ShieldUser,
-  Sparkles,
-  Spline,
-  Swords,
-  TriangleAlert,
-  UserRound,
-  Waypoints,
-  type LucideIcon, Eye,
-  Dna,
-} from "lucide-react";
+import { BookOpen, CalendarDays, ChevronDown, Clapperboard, Compass, Dices, Dna, Eye, Gem, GitBranch, History, Inbox, Languages, LayoutDashboard, Map as MapIcon, Megaphone, Mountain, Music, Newspaper, NotebookPen, PanelLeftClose, PanelLeftOpen, PawPrint, Plus, Route, ScrollText, SearchCheck, Settings, ShieldUser, Sparkles, Spline, Sprout, Swords, TriangleAlert, type LucideIcon, UserRound, Waypoints } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LogoMark } from "./logo";
 import { useWorld } from "./world-context";
@@ -93,6 +57,7 @@ export function Sidebar({ worlds, pendingProposals, mobileOpen, onMobileClose }:
     { href: `${base}/timeline`, label: "Timeline", icon: History },
     { href: `${base}/calendar`, label: "Calendar", icon: CalendarDays },
     { href: `${base}/graph`, label: "Relationships", icon: Waypoints },
+    { href: `${base}/thin-spots`, label: "Thin spots", icon: Sprout },
   ];
   const livingNav: NavItem[] = [
     { href: `${base}/threads`, label: "World threads", icon: Spline },
